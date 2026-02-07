@@ -10,6 +10,8 @@ class FunctionSpec:
     allowed_goals: tuple[str, ...]
     target_z: float           # globales Optimum (für allowed_goals)
     tolerance: float          # wann gilt "found"
+    bounds: dict  # {"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5}
+
 
 
 FUNCTIONS: dict[str, FunctionSpec] = {
@@ -19,6 +21,7 @@ FUNCTIONS: dict[str, FunctionSpec] = {
         allowed_goals=("min",),
         target_z=0.0,
         tolerance=0.01,   # <= 0.01 gilt als gefunden
+        bounds={"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5}
     )
 }
 
@@ -31,9 +34,11 @@ def list_function_specs() -> list[dict]:
             "allowed_goals": list(f.allowed_goals),
             "target_z": f.target_z,
             "tolerance": f.tolerance,
+            "bounds": f.bounds,  # <-- NEU
         }
         for f in FUNCTIONS.values()
     ]
+
 
 
 def get_spec(function_id: str) -> FunctionSpec:

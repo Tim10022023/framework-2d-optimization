@@ -28,8 +28,12 @@ class Participant:
 class Session:
     code: str
     function_id: str
-    goal: str  # "min" or "max"
+    goal: str
+    admin_token: str
+    status: str = "running"
     participants: Dict[str, Participant] = field(default_factory=dict)
+
+
 
 
 # In-memory "DB"
@@ -43,7 +47,8 @@ def new_code() -> str:
 
 def create_session(function_id: str, goal: str) -> Session:
     code = new_code()
-    session = Session(code=code, function_id=function_id, goal=goal)
+    admin_token = uuid4().hex
+    session = Session(code=code, function_id=function_id, goal=goal, admin_token=admin_token)
     SESSIONS[code] = session
     return session
 
