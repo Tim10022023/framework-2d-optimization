@@ -20,9 +20,41 @@ FUNCTIONS: dict[str, FunctionSpec] = {
         name="Sphere (x^2 + y^2)",
         allowed_goals=("min",),
         target_z=0.0,
-        tolerance=0.01,   # <= 0.01 gilt als gefunden
-        bounds={"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5}
-    )
+        tolerance=0.01,
+        bounds={"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5},
+    ),
+    "himmelblau": FunctionSpec(
+        id="himmelblau",
+        name="Himmelblau",
+        allowed_goals=("min",),
+        target_z=0.0,
+        tolerance=0.01,
+        bounds={"xmin": -6, "xmax": 6, "ymin": -6, "ymax": 6},
+    ),
+    "rastrigin": FunctionSpec(
+        id="rastrigin",
+        name="Rastrigin",
+        allowed_goals=("min",),
+        target_z=0.0,
+        tolerance=0.1,
+        bounds={"xmin": -5.12, "xmax": 5.12, "ymin": -5.12, "ymax": 5.12},
+    ),
+    "ackley": FunctionSpec(
+        id="ackley",
+        name="Ackley",
+        allowed_goals=("min",),
+        target_z=0.0,
+        tolerance=0.1,
+        bounds={"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5},
+    ),
+    "rosenbrock": FunctionSpec(
+    id="rosenbrock",
+    name="Rosenbrock",
+    allowed_goals=("min",),
+    target_z=0.0,
+    tolerance=0.1,
+    bounds={"xmin": -2, "xmax": 2, "ymin": -1, "ymax": 3},
+),
 }
 
 
@@ -50,4 +82,25 @@ def get_spec(function_id: str) -> FunctionSpec:
 def evaluate_function(function_id: str, x: float, y: float) -> float:
     if function_id == "sphere":
         return x * x + y * y
+
+    if function_id == "himmelblau":
+        return (x * x + y - 11) ** 2 + (x + y * y - 7) ** 2
+
+    if function_id == "rastrigin":
+        import math
+        return 20 + (x * x - 10 * math.cos(2 * math.pi * x)) + (y * y - 10 * math.cos(2 * math.pi * y))
+
+    if function_id == "ackley":
+        import math
+        return (
+            -20 * math.exp(-0.2 * math.sqrt(0.5 * (x * x + y * y)))
+            - math.exp(0.5 * (math.cos(2 * math.pi * x) + math.cos(2 * math.pi * y)))
+            + math.e
+            + 20
+        )
+    if function_id == "rosenbrock":
+        return (1 - x) ** 2 + 100 * (y - x * x) ** 2
+
     raise ValueError(f"unknown function_id: {function_id}")
+
+

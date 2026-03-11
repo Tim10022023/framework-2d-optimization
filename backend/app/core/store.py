@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from app.core.functions import get_spec
 
+from app.db.session import SessionLocal
+from app.db.models import SessionModel, ParticipantModel, ClickModel
 
 @dataclass
 class Click:
@@ -48,57 +50,155 @@ def new_code() -> str:
 def create_session(function_id: str, goal: str) -> Session:
     code = new_code()
     admin_token = uuid4().hex
-    session = Session(code=code, function_id=function_id, goal=goal, admin_token=admin_token)
-    SESSIONS[code] = session
-    return session
+
+    db = SessionLocal()
+    try:
+        db_session = SessionModel(
+            code=code,
+            function_id=function_id,
+            goal=goal,
+            admin_token=admin_token,
+            status="running",
+        )
+        db.add(db_session)
+        db.commit()
+        db.refresh(db_session)
+
+        return Session(
+            code=db_session.code,
+            function_id=db_session.function_id,
+            goal=db_session.goal,
+            admin_token=db_session.admin_token,
+            status=db_session.status,
+            participants={},
+        )
+    finally:
+        db.close()
 
 
 def get_session(code: str) -> Optional[Session]:
-    return SESSIONS.get(code)
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            return None
+
+        participants = {}
+        for p in db_session.participants:
+            clicks = [
+                Click(x=c.x, y=c.y, z=c.z)
+                for c in sorted(p.clicks, key=lambda click: click.step)
+            ]
+
+            participants[p.participant_code] = Participant(
+                id=p.participant_code,
+                name=p.name,
+                clicks=clicks,
+                found_step=p.found_step,
+                found_z=p.found_z,
+            )
+
+        return Session(
+            code=db_session.code,
+            function_id=db_session.function_id,
+            goal=db_session.goal,
+            admin_token=db_session.admin_token,
+            status=db_session.status,
+            participants=participants,
+        )
+    finally:
+        db.close()
 
 def join_session(code: str, name: str) -> Participant:
-    s = get_session(code)
-    if not s:
-        raise KeyError("session not found")
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            raise KeyError("session not found")
 
-    pid = uuid4().hex[:8]
-    p = Participant(id=pid, name=name)
-    s.participants[pid] = p
-    return p
+        pid = uuid4().hex[:8]
+
+        db_participant = ParticipantModel(
+            participant_code=pid,
+            name=name,
+            session_id=db_session.id,
+        )
+        db.add(db_participant)
+        db.commit()
+        db.refresh(db_participant)
+
+        return Participant(
+            id=db_participant.participant_code,
+            name=db_participant.name,
+            clicks=[],
+            found_step=db_participant.found_step,
+            found_z=db_participant.found_z,
+        )
+    finally:
+        db.close()
 
 def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> dict:
-    s = get_session(code)
-    if not s:
-        raise KeyError("session not found")
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            raise KeyError("session not found")
 
-    p = s.participants.get(participant_id)
-    if not p:
-        raise KeyError("participant not found")
+        db_participant = (
+            db.query(ParticipantModel)
+            .filter(
+                ParticipantModel.session_id == db_session.id,
+                ParticipantModel.participant_code == participant_id,
+            )
+            .first()
+        )
+        if not db_participant:
+            raise KeyError("participant not found")
 
-    p.clicks.append(Click(x=x, y=y, z=z))
-    step = len(p.clicks)
+        current_clicks = sorted(db_participant.clicks, key=lambda c: c.step)
+        step = len(current_clicks) + 1
 
-    # Bestes z so far
-    zs = [c.z for c in p.clicks]
-    best_z = min(zs) if s.goal == "min" else max(zs)
+        db_click = ClickModel(
+            x=x,
+            y=y,
+            z=z,
+            step=step,
+            participant_id=db_participant.id,
+        )
+        db.add(db_click)
+        db.commit()
+        db.refresh(db_click)
 
-    # Found-Kriterium anhand FunctionSpec
-    spec = get_spec(s.function_id)
-    found_now = False
+        all_zs = [c.z for c in current_clicks] + [z]
+        best_z = min(all_zs) if db_session.goal == "min" else max(all_zs)
 
-    if p.found_step is None:
-        if s.goal == "min" and best_z <= spec.target_z + spec.tolerance:
-            p.found_step = step
-            p.found_z = best_z
-            found_now = True
+        spec = get_spec(db_session.function_id)
+        found_now = False
 
-    return {
-        "step": step,
-        "best_z": best_z,
-        "found": p.found_step is not None,
-        "found_step": p.found_step,
-        "found_now": found_now,
-    }
+        if db_participant.found_step is None:
+            if db_session.goal == "min" and best_z <= spec.target_z + spec.tolerance:
+                db_participant.found_step = step
+                db_participant.found_z = best_z
+                found_now = True
+
+            elif db_session.goal == "max" and best_z >= spec.target_z - spec.tolerance:
+                db_participant.found_step = step
+                db_participant.found_z = best_z
+                found_now = True
+
+            if found_now:
+                db.commit()
+                db.refresh(db_participant)
+
+        return {
+            "step": step,
+            "best_z": best_z,
+            "found": db_participant.found_step is not None,
+            "found_step": db_participant.found_step,
+            "found_now": found_now,
+        }
+    finally:
+        db.close()
 
 
 def compute_leaderboard(code: str) -> list[dict]:
@@ -152,4 +252,40 @@ def compute_leaderboard(code: str) -> list[dict]:
 
     return rows
 
+def set_session_status(code: str, status: str) -> Session:
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            raise KeyError("session not found")
+
+        db_session.status = status
+        db.commit()
+        db.refresh(db_session)
+
+        participants = {}
+        for p in db_session.participants:
+            clicks = [
+                Click(x=c.x, y=c.y, z=c.z)
+                for c in sorted(p.clicks, key=lambda click: click.step)
+            ]
+
+            participants[p.participant_code] = Participant(
+                id=p.participant_code,
+                name=p.name,
+                clicks=clicks,
+                found_step=p.found_step,
+                found_z=p.found_z,
+            )
+
+        return Session(
+            code=db_session.code,
+            function_id=db_session.function_id,
+            goal=db_session.goal,
+            admin_token=db_session.admin_token,
+            status=db_session.status,
+            participants=participants,
+        )
+    finally:
+        db.close()
 

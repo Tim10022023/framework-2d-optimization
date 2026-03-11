@@ -1,11 +1,14 @@
 from fastapi import FastAPI
-
-from app.api.functions import router as functions_router
-from app.api.sessions import router as sessions_router
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.db.session import Base, engine
+from app.db import models
+from app.api.functions import router as functions_router
+from app.api.sessions import router as sessions_router
 
 app = FastAPI(title="2D Optimization Framework")
+
+Base.metadata.create_all(bind=engine)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

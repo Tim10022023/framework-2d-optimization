@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-from app.core.store import create_session, get_session, join_session, add_click, compute_leaderboard
+from app.core.store import create_session, get_session, join_session, add_click, compute_leaderboard, set_session_status
 from app.core.functions import evaluate_function
 from app.core.functions import get_spec
 
@@ -46,11 +46,12 @@ def get_session_info(code: str):
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
     return {
-        "session_code": s.code,
-        "function_id": s.function_id,
-        "goal": s.goal,
-        "participants": len(s.participants),
-    }
+    "session_code": s.code,
+    "function_id": s.function_id,
+    "goal": s.goal,
+    "participants": len(s.participants),
+    "status": s.status,
+}
 
 class JoinSessionBody(BaseModel):
     name: str
@@ -117,8 +118,8 @@ def end_session(code: str, x_admin_token: str = Header(default="")):
     if x_admin_token != s.admin_token:
         raise HTTPException(status_code=401, detail="invalid admin token")
 
-    s.status = "ended"
-    return {"session_code": code, "status": s.status}
+    updated = set_session_status(code, "ended")
+    return {"session_code": code, "status": updated.status}
 
 @router.get("/{code}/export")
 def export_session(code: str, x_admin_token: str = Header(default="")):

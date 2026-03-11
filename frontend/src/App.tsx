@@ -1,7 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createSession, endSession, evaluatePoint, exportSession, getLeaderboard, joinSession } from "./api";
-
-type Point = { x: number; y: number; z: number; step: number };
+import { useEffect, useMemo, useState } from "react";
+import {
+  createSession,
+  endSession,
+  evaluatePoint,
+  exportSession,
+  getFunctions,
+  getLeaderboard,
+  joinSession,
+  getSessionInfo,
+} from "./api";
+import TeacherPanel from "./components/TeacherPanel";
+import ParticipantPanel from "./components/ParticipantPanel";
+import PlotCanvas from "./components/PlotCanvas";
+import LeaderboardPanel from "./components/LeaderboardPanel";
+import ExportPanel from "./components/ExportPanel";
+import type { FunctionSpec, Point } from "./types";
+import StatusBar from "./components/StatusBar";
+import PointsListPanel from "./components/PointsListPanel";
+import StatsPanel from "./components/StatsPanel";
 
 export default function App() {
   const [error, setError] = useState<string | null>(null);
@@ -11,41 +27,95 @@ export default function App() {
   const [adminToken, setAdminToken] = useState<string>("");
 
   // Teilnehmer
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
+  const [code, setCode] = useState(
+    () => localStorage.getItem("opt2d_code") ?? "",
+  );
+  const [name, setName] = useState(
+    () => localStorage.getItem("opt2d_name") ?? "",
+  );
   const [participantId, setParticipantId] = useState<string | null>(null);
+  const [sessionStatus, setSessionStatus] = useState<string>("running");
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
+  const [isEndingSession, setIsEndingSession] = useState(false);
+
+  const [functions, setFunctions] = useState<FunctionSpec[]>([]);
+  const [selectedFunctionId, setSelectedFunctionId] = useState("sphere");
+  const [selectedGoal, setSelectedGoal] = useState<"min" | "max">("min");
 
   const [points, setPoints] = useState<Point[]>([]);
   const [leaderboard, setLeaderboard] = useState<any>(null);
 
   const [exportData, setExportData] = useState<any>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const selectedFunction = useMemo(
+    () => functions.find((f) => f.id === selectedFunctionId) ?? null,
+    [functions, selectedFunctionId],
+  );
 
-  // MVP: feste Bounds
-  const bounds = useMemo(() => ({ xmin: -5, xmax: 5, ymin: -5, ymax: 5 }), []);
+  const bounds = useMemo(
+    () => selectedFunction?.bounds ?? { xmin: -5, xmax: 5, ymin: -5, ymax: 5 },
+    [selectedFunction],
+  );
 
+  function resetSessionView() {
+    setParticipantId(null);
+    setPoints([]);
+    setLeaderboard(null);
+    setExportData(null);
+    setSessionStatus("running");
+    setError(null);
+  }
+
+  function leaveSession() {
+    setParticipantId(null);
+    setPoints([]);
+    setLeaderboard(null);
+    setExportData(null);
+    setSessionStatus("running");
+    setJoinMessage(null);
+    setError(null);
+  }
   async function onCreateSession() {
     setError(null);
+    setIsCreatingSession(true);
+
     try {
-      const r = await createSession("sphere", "min");
+      const r = await createSession(selectedFunctionId, selectedGoal);
       setCreatedCode(r.session_code);
       setAdminToken(r.admin_token);
-      setCode(r.session_code); // bequem: direkt ins Join-Feld übernehmen
-      setParticipantId(null);
-      setPoints([]);
-      setExportData(null);
+      setCode(r.session_code);
+      resetSessionView();
     } catch (e: any) {
       setError(e?.message ?? String(e));
+    } finally {
+      setIsCreatingSession(false);
     }
   }
 
   async function onEndSession() {
     setError(null);
+    setIsEndingSession(true);
+
     try {
       await endSession(code.trim(), adminToken.trim());
       const data = await exportSession(code.trim(), adminToken.trim());
       setExportData(data);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setIsEndingSession(false);
+    }
+  }
+
+  async function handleEvaluate(x: number, y: number) {
+    if (!participantId) return;
+
+    setError(null);
+    try {
+      const r = await evaluatePoint(code.trim(), participantId, x, y);
+      setPoints((prev) => [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }]);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
@@ -53,14 +123,88 @@ export default function App() {
 
   async function onJoin() {
     setError(null);
+    setJoinMessage(null);
+    setIsJoining(true);
+
     try {
       const r = await joinSession(code.trim(), name.trim());
       setParticipantId(r.participant_id);
       setPoints([]);
+      setLeaderboard(null);
+      setExportData(null);
+      setSessionStatus("running");
+      setJoinMessage(`Beigetreten als ${r.name}`);
     } catch (e: any) {
       setError(e?.message ?? String(e));
+    } finally {
+      setIsJoining(false);
     }
   }
+
+  useEffect(() => {
+    localStorage.setItem("opt2d_code", code);
+  }, [code]);
+
+  useEffect(() => {
+    localStorage.setItem("opt2d_name", name);
+  }, [name]);
+
+  useEffect(() => {
+    async function loadFunctions() {
+      try {
+        const data = await getFunctions();
+        setFunctions(data.functions);
+
+        if (data.functions.length > 0) {
+          const first = data.functions[0];
+          setSelectedFunctionId(first.id);
+          setSelectedGoal(first.allowed_goals[0] as "min" | "max");
+        }
+      } catch (e: any) {
+        setError(e?.message ?? String(e));
+      }
+    }
+
+    loadFunctions();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const codeFromUrl = params.get("code");
+    if (codeFromUrl) {
+      setCode(codeFromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    async function syncSessionInfo() {
+      if (!code.trim()) return;
+
+      try {
+        const info = await getSessionInfo(code.trim());
+
+        setSessionStatus(info.status);
+        setSelectedFunctionId(info.function_id);
+
+        if (info.goal === "min" || info.goal === "max") {
+          setSelectedGoal(info.goal);
+        }
+      } catch {
+        // bewusst still: z.B. wenn Code noch unvollständig eingetippt wird
+      }
+    }
+
+    syncSessionInfo();
+  }, [code]);
+
+  useEffect(() => {
+    const fn = functions.find((f) => f.id === selectedFunctionId);
+    if (!fn) return;
+
+    if (!fn.allowed_goals.includes(selectedGoal)) {
+      setSelectedGoal(fn.allowed_goals[0] as "min" | "max");
+    }
+  }, [functions, selectedFunctionId, selectedGoal]);
 
   // Polling Leaderboard
   useEffect(() => {
@@ -69,6 +213,14 @@ export default function App() {
       try {
         const lb = await getLeaderboard(code.trim());
         setLeaderboard(lb);
+
+        const info = await getSessionInfo(code.trim());
+        setSessionStatus(info.status);
+        setSelectedFunctionId(info.function_id);
+
+        if (info.goal === "min" || info.goal === "max") {
+          setSelectedGoal(info.goal);
+        }
       } catch {
         // ignore
       }
@@ -76,162 +228,117 @@ export default function App() {
     return () => clearInterval(id);
   }, [code]);
 
-  // Canvas render
-  useEffect(() => {
-    const c = canvasRef.current;
-    if (!c) return;
-    const ctx = c.getContext("2d");
-    if (!ctx) return;
+  const publicAppUrl =
+    import.meta.env.VITE_PUBLIC_APP_URL ?? window.location.origin;
 
-    const w = c.width, h = c.height;
-    ctx.clearRect(0, 0, w, h);
+  const joinLink = createdCode ? `${publicAppUrl}/?code=${createdCode}` : "";
 
-    // Achsen
-    ctx.beginPath();
-    ctx.moveTo(0, h / 2);
-    ctx.lineTo(w, h / 2);
-    ctx.moveTo(w / 2, 0);
-    ctx.lineTo(w / 2, h);
-    ctx.stroke();
-
-    // Punkte
-    for (const p of points) {
-      const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-      const py = (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-      ctx.beginPath();
-      ctx.arc(px, py, 4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }, [points, bounds]);
-
-  async function onCanvasClick(ev: React.MouseEvent<HTMLCanvasElement>) {
-    if (!participantId) return;
-
-    const c = canvasRef.current!;
-    const rect = c.getBoundingClientRect();
-    const xPix = ev.clientX - rect.left;
-    const yPix = ev.clientY - rect.top;
-
-    const x = bounds.xmin + (xPix / c.width) * (bounds.xmax - bounds.xmin);
-    const y = bounds.ymax - (yPix / c.height) * (bounds.ymax - bounds.ymin);
-
-    setError(null);
-    try {
-      const r = await evaluatePoint(code.trim(), participantId, Number(x.toFixed(4)), Number(y.toFixed(4)));
-      setPoints((prev) => [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }]);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+  function getFunctionDescription(functionId: string | null) {
+    switch (functionId) {
+      case "sphere":
+        return "Einfache, glatte Testfunktion mit einem klaren globalen Minimum.";
+      case "himmelblau":
+        return "Multimodale Funktion mit mehreren gleich guten Minima.";
+      case "rastrigin":
+        return "Schwierigere Benchmark-Funktion mit vielen lokalen Minima.";
+      case "ackley":
+        return "Benchmark-Funktion mit vielen lokalen Strukturen und globalem Minimum im Zentrum.";
+      case "rosenbrock":
+        return "Klassische Tal-Funktion mit globalem Minimum bei (1,1), also nicht im Zentrum.";
+      default:
+        return "Keine Beschreibung verfügbar.";
     }
   }
 
   return (
-    <div style={{ display: "flex", gap: 16, padding: 16, fontFamily: "system-ui, sans-serif" }}>
+    <div
+      style={{
+        display: "flex",
+        gap: 16,
+        padding: 16,
+        fontFamily: "system-ui, sans-serif",
+      }}
+    >
       <div style={{ flex: 1 }}>
         <h2>2D Optimization (Frontend MVP)</h2>
 
-        {/* Dozent */}
-        <div style={{ border: "1px solid #eee", padding: 12, marginBottom: 12 }}>
-          <h3 style={{ marginTop: 0 }}>Dozent</h3>
-          <button onClick={onCreateSession}>Neue Session erstellen (sphere/min)</button>
-          <div style={{ marginTop: 8, fontSize: 12 }}>
-            session_code: <b>{createdCode || "-"}</b>
-            <br />
-            admin_token: <code>{adminToken || "-"}</code>
+        <StatusBar
+          code={code}
+          name={name}
+          functionName={selectedFunction?.name ?? "-"}
+          goal={selectedGoal}
+          sessionStatus={sessionStatus}
+        />
+        <TeacherPanel
+          functions={functions}
+          selectedFunctionId={selectedFunctionId}
+          selectedGoal={selectedGoal}
+          selectedFunction={selectedFunction}
+          bounds={bounds}
+          createdCode={createdCode}
+          adminToken={adminToken}
+          joinLink={joinLink}
+          functionDescription={getFunctionDescription(
+            selectedFunction?.id ?? null,
+          )}
+          onChangeFunction={setSelectedFunctionId}
+          onChangeGoal={setSelectedGoal}
+          onCreateSession={onCreateSession}
+          onEndSession={onEndSession}
+          isCreatingSession={isCreatingSession}
+          isEndingSession={isEndingSession}
+        />
+
+        {joinMessage && (
+          <div style={{ marginBottom: 8, fontSize: 12, color: "green" }}>
+            {joinMessage}
           </div>
-          <div style={{ marginTop: 8 }}>
-            <button onClick={onEndSession} disabled={!code.trim() || !adminToken.trim()}>
-              Session beenden + Export laden
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Teilnehmer */}
         {!participantId ? (
-          <div style={{ display: "grid", gap: 8, maxWidth: 360 }}>
-            <h3 style={{ margin: 0 }}>Teilnehmer</h3>
-            <label>
-              Session-Code
-              <input value={code} onChange={(e) => setCode(e.target.value)} style={{ width: "100%" }} />
-            </label>
-            <label>
-              Name
-              <input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} />
-            </label>
-            <button onClick={onJoin} disabled={!code.trim() || !name.trim()}>
-              Join
-            </button>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              API: <code>{import.meta.env.VITE_API_URL}</code>
-            </div>
-          </div>
+          <ParticipantPanel
+            code={code}
+            name={name}
+            apiUrl={import.meta.env.VITE_API_URL}
+            onChangeCode={setCode}
+            onChangeName={setName}
+            onJoin={onJoin}
+            isJoining={isJoining}
+          />
         ) : (
           <>
-            <div style={{ marginBottom: 8, fontSize: 14 }}>
-              Session: <b>{code}</b> • Participant: <code>{participantId}</code>
+            <div style={{ marginBottom: 8 }}>
+              <button onClick={leaveSession}>Session verlassen</button>
             </div>
-
-            <canvas
-              ref={canvasRef}
-              width={600}
-              height={600}
-              onClick={onCanvasClick}
-              style={{ border: "1px solid #ccc", cursor: "crosshair" }}
-              title="Klicken zum Evaluieren"
+            <PlotCanvas
+              code={code}
+              participantId={participantId}
+              sessionStatus={sessionStatus}
+              bounds={bounds}
+              points={points}
+              onEvaluate={handleEvaluate}
             />
-
-            <div style={{ marginTop: 12 }}>
-              <h3>Meine Klicks</h3>
-              <div style={{ fontSize: 12, maxHeight: 200, overflow: "auto", border: "1px solid #eee", padding: 8 }}>
-                {points.length === 0 ? (
-                  <div>Noch keine Klicks.</div>
-                ) : (
-                  points
-                    .slice()
-                    .reverse()
-                    .map((p) => (
-                      <div key={p.step}>
-                        #{p.step} → (x={p.x}, y={p.y}) ⇒ z={p.z}
-                      </div>
-                    ))
-                )}
-              </div>
-            </div>
+            <StatsPanel
+              points={points}
+              targetZ={selectedFunction?.target_z ?? 0}
+              tolerance={selectedFunction?.tolerance ?? 0.01}
+            />{" "}
+            <PointsListPanel points={points} />
           </>
         )}
-
-        {exportData && (
-          <div style={{ marginTop: 12, border: "1px solid #eee", padding: 12 }}>
-            <h3 style={{ marginTop: 0 }}>Export (Reveal)</h3>
-            <div style={{ fontSize: 12, maxHeight: 220, overflow: "auto" }}>
-              <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(exportData, null, 2)}</pre>
-            </div>
-          </div>
-        )}
+        <ExportPanel exportData={exportData} />
 
         {error && (
-          <pre style={{ marginTop: 12, color: "crimson", whiteSpace: "pre-wrap" }}>
+          <pre
+            style={{ marginTop: 12, color: "crimson", whiteSpace: "pre-wrap" }}
+          >
             {error}
           </pre>
         )}
       </div>
 
-      {/* Leaderboard */}
-      <div style={{ width: 380 }}>
-        <h3>Leaderboard (polling)</h3>
-        <div style={{ fontSize: 12, border: "1px solid #eee", padding: 8, minHeight: 200 }}>
-          {!leaderboard ? (
-            <div>No data yet.</div>
-          ) : (
-            <ol>
-              {leaderboard.leaderboard?.map((r: any) => (
-                <li key={r.participant_id}>
-                  <b>{r.name}</b> — found: {String(r.found)} — found_step: {r.found_step ?? "-"} — steps: {r.steps} — best_z: {r.best_z ?? "-"}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      </div>
+      <LeaderboardPanel leaderboard={leaderboard} />
     </div>
   );
 }
