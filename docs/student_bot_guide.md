@@ -1,116 +1,82 @@
 # Student Bot Guide
 
-## Ziel
-Mit einem lokalen Python-Bot an einer laufenden Session teilnehmen und eine eigene Optimierungsstrategie testen.
+Diese Kurzanleitung erklärt, wie ein eigener lokaler Python-Bot gegen das Framework **2D Optimization** ausgeführt werden kann.
 
-Der Bot kennt die Funktion **nicht**.  
-Er kann nur:
-- der Session beitreten
-- Punkte `(x, y)` evaluieren
-- die erhaltenen `z`-Werte nutzen
+## Zweck
 
-## Welche Dateien brauchst du?
-Für Studierende reichen diese Dateien:
-- `bot/student_bot_template.py`
+Der Student-Bot arbeitet gegen die **öffentliche Blackbox-Schnittstelle** einer laufenden Session.  
+Er kennt nicht die interne Funktionsdefinition, sondern nutzt nur die erlaubten Session- und Evaluierungsinformationen.
+
+## Relevante Dateien
+
 - `bot/blackbox_client.py`
+- `bot/student_bot_template.py`
 
-Zusätzlich:
-- Python installiert
-- Paket `requests` installiert
+## Voraussetzungen
 
-Installation:
+Python ist lokal installiert.
+
+Benötigte Bibliothek:
+
 ```powershell
 pip install requests
 ```
 
-## Session-Code eintragen
-In `student_bot_template.py`:
+## Session vorbereiten
 
-```python
-SESSION_CODE = "HIER_SESSION_CODE_EINTRAGEN"
-```
+Voraussetzung:
+- es gibt bereits eine laufende Session
+- der Session-Status ist `running`
 
-Optional kann auch der Bot-Name angepasst werden:
-
-```python
-BOT_NAME = "Bot-Student-Template"
-```
+Den Session-Code trägst du im Bot-Template ein.
 
 ## Bot starten
-Im Projektordner:
 
 ```powershell
 python bot\student_bot_template.py
 ```
 
-Der Bot:
-1. liest öffentliche Session-Infos
-2. joint als Bot die Session
-3. evaluiert Punkte
-4. erscheint im Leaderboard und im Dozenten-Inspector
+## Was der Bot macht
 
-## Wo der eigene Algorithmus eingebaut wird
-In `student_bot_template.py` gibt es die Funktion:
+Der Bot sendet Punkte an die laufende Session und erhält dafür die jeweiligen Funktionswerte zurück.  
+Die Logik, wie neue Punkte vorgeschlagen werden, implementierst du selbst.
 
-```python
-def propose_point(step, history, best_z):
-    ...
-```
+Typischer Einstieg:
+- Session-Code eintragen
+- `propose_point(...)` anpassen
+- Bot starten
+- Verlauf im Frontend beobachten
 
-Dort wird die eigene Optimierungslogik implementiert.
+## API / Verbindung
 
-### Eingaben
-- `step`: aktueller Schritt
-- `history`: bisherige Evaluierungen
-- `best_z`: bester bisher gefundener Wert
+Der Client nutzt die öffentliche Session-/Blackbox-Schnittstelle.
 
-### Ausgabe
-Die Funktion muss zurückgeben:
+Wichtig:
+- lokal ist die API typischerweise unter `http://localhost:8000` erreichbar
+- wenn Frontend/Backend anders gehostet sind, muss die API-URL entsprechend angepasst werden
 
-```python
-(x, y)
-```
+## Hinweise zur Implementierung
 
-## Einfaches Beispiel
-```python
-def propose_point(step, history, best_z):
-    x = random.uniform(-5, 5)
-    y = random.uniform(-5, 5)
-    return x, y
-```
+Sinnvolle einfache Strategien:
+- Random Search
+- lokales Ausprobieren um gute Punkte herum
+- Hill-Climbing-artige Verfahren
+- Restart-Strategien
 
-## Typischer Ablauf
-1. Session-Code vom Dozenten erhalten
-2. `SESSION_CODE` eintragen
-3. eigenen Algorithmus in `propose_point(...)` umsetzen
-4. Bot starten
-5. Verlauf im Leaderboard / Inspector beobachten
+Wichtig:
+- der Bot soll mit der Blackbox arbeiten, nicht mit internem Direktzugriff auf die Zielfunktion
+- das Template ist bewusst einfach gehalten und kann erweitert werden
 
-## Typische Fehler
+## Typische Fehlerquellen
 
-### `ModuleNotFoundError: No module named 'requests'`
-Lösung:
-```powershell
-pip install requests
-```
+- falscher Session-Code
+- Session noch nicht gestartet oder schon beendet
+- API-URL nicht passend gesetzt
+- zu aggressive Request-Frequenz bei vielen parallelen Bots
 
-### `session not found`
-- Session-Code prüfen
-- prüfen, ob das Backend läuft
-- prüfen, ob die Session noch aktiv ist
+## Einordnung
 
-### Backend nicht erreichbar
-Prüfen:
-- läuft das Backend unter `http://localhost:8000`?
-- stimmt `API_URL` in der Bot-Datei?
-
-### Klicklimit erreicht
-Der Bot stoppt, wenn das Session-Limit erreicht ist.
-
-## Was du Studierenden geben solltest
-Für die Nutzung des lokalen Bots genügen:
-- dieser Guide
-- `bot/student_bot_template.py`
-- `bot/blackbox_client.py`
-
-Mehr brauchen Studierende dafür nicht.
+Der Student-Bot eignet sich gut für:
+- Vergleich von Suchstrategien
+- didaktische Experimente
+- kleine Bot-Wettbewerbe innerhalb einer Lehrveranstaltung

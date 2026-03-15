@@ -33,6 +33,11 @@ class EvaluateBody(BaseModel):
     y: float
 
 
+def require_admin_token(session, admin_token: str):
+    if admin_token != session.admin_token:
+        raise HTTPException(status_code=401, detail="invalid admin token")
+
+
 @router.post("")
 def create_new_session(body: CreateSessionBody):
     if body.goal not in ("min", "max"):
@@ -165,8 +170,7 @@ def end_session(code: str, x_admin_token: str = Header(default="")):
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
-    if x_admin_token != s.admin_token:
-        raise HTTPException(status_code=401, detail="invalid admin token")
+    require_admin_token(s, x_admin_token)
 
     updated = set_session_status(code, "ended")
     return {
@@ -181,11 +185,8 @@ def export_session(code: str, x_admin_token: str = Header(default="")):
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
-    if x_admin_token != s.admin_token:
-        raise HTTPException(status_code=401, detail="invalid admin token")
+    require_admin_token(s, x_admin_token)
 
-    if s.status != "ended":
-        raise HTTPException(status_code=409, detail="session not ended")
 
     spec = get_spec(s.function_id)
 
@@ -230,6 +231,7 @@ def export_session(code: str, x_admin_token: str = Header(default="")):
 @router.post("/{code}/bots/random_search")
 def bot_random_search(
     code: str,
+    admin_token: str,
     n: int = 20,
     seed: int | None = None,
     delay_ms: int = 0,
@@ -237,10 +239,13 @@ def bot_random_search(
     s = get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
-    if s.status == "ended":
-        raise HTTPException(status_code=409, detail="session ended")
+
+    require_admin_token(s, admin_token)
+
     if delay_ms < 0 or delay_ms > 5000:
-        raise HTTPException(status_code=400, detail="delay_ms must be between 0 and 5000")
+        raise HTTPException(
+            status_code=400, detail="delay_ms must be between 0 and 5000"
+        )
     if n <= 0 or n > 1000:
         raise HTTPException(status_code=400, detail="n must be between 1 and 1000")
 
@@ -276,6 +281,7 @@ def bot_random_search(
 @router.post("/{code}/bots/hill_climb")
 def bot_hill_climb(
     code: str,
+    admin_token: str,
     n: int = 30,
     step_size: float = 0.5,
     seed: int | None = None,
@@ -284,10 +290,13 @@ def bot_hill_climb(
     s = get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
-    if s.status == "ended":
-        raise HTTPException(status_code=409, detail="session ended")
+
+    require_admin_token(s, admin_token)
+
     if delay_ms < 0 or delay_ms > 5000:
-        raise HTTPException(status_code=400, detail="delay_ms must be between 0 and 5000")
+        raise HTTPException(
+            status_code=400, detail="delay_ms must be between 0 and 5000"
+        )
     if n <= 0 or n > 2000:
         raise HTTPException(status_code=400, detail="n must be between 1 and 2000")
     if step_size <= 0:
@@ -297,7 +306,10 @@ def bot_hill_climb(
         random.seed(seed)
 
     bot_name = f"Bot-HillClimb(n={n},h={step_size})"
-    bot = join_session(code=code, name=bot_name, is_bot=True)
+    try:
+        bot = join_session(code=code, name=bot_name, is_bot=True)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session not found")
 
     spec = get_spec(s.function_id)
     b = spec.bounds
@@ -386,3 +398,4 @@ def session_snapshot(code: str):
         "goal": s.goal,
         "participants": participants,
     }
+

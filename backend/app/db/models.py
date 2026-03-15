@@ -15,7 +15,6 @@ class SessionModel(Base):
     admin_token = Column(String, nullable=False)
     status = Column(String, default="running", nullable=False)
     max_steps = Column(Integer, nullable=False, default=30)
-
     participants = relationship("ParticipantModel", back_populates="session", cascade="all, delete-orphan")
 
 

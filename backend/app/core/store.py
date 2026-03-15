@@ -33,9 +33,9 @@ class Session:
     function_id: str
     goal: str
     admin_token: str
-    max_steps: int
     status: str = "running"
-    participants: Dict[str, Participant] = field(default_factory=dict)
+    max_steps: int = 30
+    participants: dict[str, "Participant"] = field(default_factory=dict)
 
 
 
@@ -74,7 +74,7 @@ def create_session(function_id: str, goal: str, max_steps: int) -> Session:
             admin_token=db_session.admin_token,
             status=db_session.status,
             participants={},
-            max_steps=db_session.max_steps
+            max_steps=db_session.max_steps,
         )
     finally:
         db.close()

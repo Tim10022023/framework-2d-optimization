@@ -6,6 +6,7 @@ import type {
   SessionInfo,
   SessionSnapshot,
 } from "./types";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 async function readErrorMessage(res: Response): Promise<string> {
@@ -18,6 +19,7 @@ async function readErrorMessage(res: Response): Promise<string> {
     if (detail === "participant not found") return "Teilnehmer nicht gefunden.";
     if (detail === "invalid admin token") return "Admin-Token ungültig.";
     if (typeof detail === "string") return detail;
+    if (detail === "session not revealed") return "Reveal ist noch nicht aktiviert.";
 
     return "Unbekannter Fehler.";
   } catch {
@@ -108,14 +110,16 @@ export async function getSessionInfo(code: string): Promise<SessionInfo> {
 
 export async function startRandomBot(
   code: string,
+  adminToken: string,
   n: number,
   seed?: number,
   delayMs?: number,
 ) {
   const params = new URLSearchParams();
+  params.set("admin_token", adminToken);
   params.set("n", String(n));
+  params.set("delay_ms", String(delayMs ?? 0));
   if (seed !== undefined) params.set("seed", String(seed));
-  if (delayMs !== undefined) params.set("delay_ms", String(delayMs));
 
   const res = await fetch(
     `${API_URL}/sessions/${code}/bots/random_search?${params.toString()}`,
@@ -123,23 +127,24 @@ export async function startRandomBot(
       method: "POST",
     },
   );
-
   if (!res.ok) throw new Error(await readErrorMessage(res));
   return res.json();
 }
 
 export async function startHillClimbBot(
   code: string,
+  adminToken: string,
   n: number,
   stepSize: number,
   seed?: number,
   delayMs?: number,
 ) {
   const params = new URLSearchParams();
+  params.set("admin_token", adminToken);
   params.set("n", String(n));
   params.set("step_size", String(stepSize));
+  params.set("delay_ms", String(delayMs ?? 0));
   if (seed !== undefined) params.set("seed", String(seed));
-  if (delayMs !== undefined) params.set("delay_ms", String(delayMs));
 
   const res = await fetch(
     `${API_URL}/sessions/${code}/bots/hill_climb?${params.toString()}`,
@@ -147,7 +152,6 @@ export async function startHillClimbBot(
       method: "POST",
     },
   );
-
   if (!res.ok) throw new Error(await readErrorMessage(res));
   return res.json();
 }

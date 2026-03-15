@@ -84,10 +84,10 @@ export default function App() {
     useState<SessionSnapshot | null>(null);
 
   const [code, setCode] = useState<string>(
-    () => localStorage.getItem(LS_CODE) ?? "",
+    () => sessionStorage.getItem(LS_CODE) ?? "",
   );
   const [name, setName] = useState<string>(
-    () => localStorage.getItem(LS_NAME) ?? "",
+    () => sessionStorage.getItem(LS_NAME) ?? "",
   );
   const [participantId, setParticipantId] = useState<string | null>(null);
 
@@ -101,12 +101,14 @@ export default function App() {
   const [selectedGoal, setSelectedGoal] = useState<"min" | "max">("min");
 
   const [draftFunctionId, setDraftFunctionId] = useState("sphere_shifted");
+
   const [draftGoal, setDraftGoal] = useState<"min" | "max">("min");
   const [draftMaxSteps, setDraftMaxSteps] = useState<number>(30);
 
   const [points, setPoints] = useState<Point[]>([]);
   const [leaderboard, setLeaderboard] = useState<any>(null);
   const [exportData, setExportData] = useState<ExportData | null>(null);
+  const [revealed, setRevealed] = useState(false);
 
   const [showOnlyBots, setShowOnlyBots] = useState(false);
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
@@ -130,15 +132,26 @@ export default function App() {
     [functions, draftFunctionId],
   );
 
-  const bounds = useMemo(
+  const sessionFunction = useMemo(
+    () => functions.find((f) => f.id === selectedFunctionId) ?? null,
+    [functions, selectedFunctionId],
+  );
+
+  const draftBounds = useMemo(
     () => draftFunction?.bounds ?? { xmin: -5, xmax: 5, ymin: -5, ymax: 5 },
     [draftFunction],
   );
 
+  const activeBounds = useMemo(
+    () => sessionFunction?.bounds ?? { xmin: -5, xmax: 5, ymin: -5, ymax: 5 },
+    [sessionFunction],
+  );
+  const hasTeacherSession = Boolean(createdCode.trim() && adminToken.trim());
 
   const publicAppUrl =
     import.meta.env.VITE_PUBLIC_APP_URL ?? window.location.origin;
   const joinLink = createdCode ? `${publicAppUrl}/?code=${createdCode}` : "";
+
   function getFunctionDescription(functionId: string | null) {
     switch (functionId) {
       case "sphere_shifted":
@@ -171,12 +184,25 @@ export default function App() {
     setPoints([]);
     setLeaderboard(null);
     setExportData(null);
+    setRevealed(false);
     setSnapshot(null);
     setTeacherSnapshot(null);
     setInspectPid("");
     setShowOnlyBots(false);
     setError(null);
     saveSessionCtx(null);
+  }
+
+  function clearTeacherState() {
+    setCreatedCode("");
+    setAdminToken("");
+    setTeacherSnapshot(null);
+    setInspectPid("");
+    setExportData(null);
+    setRevealed(false);
+
+    sessionStorage.removeItem(LS_CREATED_CODE);
+    sessionStorage.removeItem(LS_ADMIN_TOKEN);
   }
 
   function leaveSession() {
@@ -186,6 +212,8 @@ export default function App() {
     setShowOnlyBots(false);
     setError(null);
     saveSessionCtx(null);
+    setExportData(null);
+    setRevealed(false);
   }
 
   async function onCreateSession() {
@@ -194,17 +222,35 @@ export default function App() {
 
     try {
       const r = await createSession(draftFunctionId, draftGoal, draftMaxSteps);
+      resetForNewSession();
       setCreatedCode(r.session_code);
       setAdminToken(r.admin_token);
       setCode(r.session_code);
       setActiveSessionCode(r.session_code);
       setCollapseSignal((v) => v + 1);
       setActiveView("teacher");
-      resetForNewSession();
+      setSessionStatus("running");
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
       setIsCreatingSession(false);
+    }
+  }
+  async function onToggleReveal() {
+    setError(null);
+
+    try {
+      if (revealed) {
+        setRevealed(false);
+        setExportData(null);
+        return;
+      }
+
+      const data = await exportSession(code.trim(), adminToken.trim());
+      setExportData(data);
+      setRevealed(true);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
     }
   }
 
@@ -214,8 +260,9 @@ export default function App() {
 
     try {
       await endSession(code.trim(), adminToken.trim());
-      const data = await exportSession(code.trim(), adminToken.trim());
-      setExportData(data);
+      setSessionStatus("ended");
+      setRevealed(false);
+      setExportData(null);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -229,10 +276,14 @@ export default function App() {
 
     try {
       const r = await joinSession(code.trim(), name.trim());
+
+      clearTeacherState();
+
       setParticipantId(r.participant_id);
       saveSessionCtx({ code: code.trim(), participantId: r.participant_id });
       setPoints([]);
       setExportData(null);
+      setRevealed(false);
       setActiveSessionCode(code.trim());
       setActiveView("participant");
     } catch (e: any) {
@@ -264,7 +315,7 @@ export default function App() {
     setIsStartingBot(true);
 
     try {
-      await startRandomBot(code.trim(), n, seed, delayMs);
+      await startRandomBot(code.trim(), adminToken.trim(), n, seed, delayMs);
       const lb = await getLeaderboard(code.trim());
       setLeaderboard(lb);
     } catch (e: any) {
@@ -284,7 +335,14 @@ export default function App() {
     setIsStartingHillClimbBot(true);
 
     try {
-      await startHillClimbBot(code.trim(), n, stepSize, seed, delayMs);
+      await startHillClimbBot(
+        code.trim(),
+        adminToken.trim(),
+        n,
+        stepSize,
+        seed,
+        delayMs,
+      );
       const lb = await getLeaderboard(code.trim());
       setLeaderboard(lb);
     } catch (e: any) {
@@ -314,38 +372,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.removeItem(LS_ADMIN_TOKEN);
-    localStorage.removeItem(LS_VIEW);
-    localStorage.removeItem(LS_SESSION_CTX);
-    localStorage.removeItem(LS_CREATED_CODE);
-  }, []);
-
-  useEffect(() => {
     const fn = functions.find((f) => f.id === draftFunctionId);
     if (!fn) return;
     if (!fn.allowed_goals.includes(draftGoal)) {
       setDraftGoal(fn.allowed_goals[0] as "min" | "max");
     }
   }, [functions, draftFunctionId, draftGoal]);
-
-  useEffect(() => {
-    async function loadExportIfEnded() {
-      if (activeView !== "teacher") return;
-      if (!createdCode.trim()) return;
-      if (!adminToken.trim()) return;
-      if (sessionStatus !== "ended") return;
-      if (exportData) return;
-
-      try {
-        const data = await exportSession(createdCode.trim(), adminToken.trim());
-        setExportData(data);
-      } catch {
-        // bewusst still, damit das UI nicht spammt
-      }
-    }
-
-    loadExportIfEnded();
-  }, [activeView, createdCode, adminToken, sessionStatus, exportData]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -407,6 +439,14 @@ export default function App() {
         setLeaderboard(lb);
 
         const info = await getSessionInfo(c);
+        if (activeView === "teacher" && revealed && adminToken.trim()) {
+          try {
+            const data = await exportSession(c, adminToken.trim());
+            setExportData(data);
+          } catch {
+            // ignore
+          }
+        }
         setSessionMaxSteps(info.max_steps ?? 30);
         setParticipantsCount(info.participants ?? 0);
         setSessionStatus(info.status);
@@ -469,11 +509,11 @@ export default function App() {
   }, [activeView]);
 
   useEffect(() => {
-    localStorage.setItem(LS_CODE, code);
+    sessionStorage.setItem(LS_CODE, code);
   }, [code]);
 
   useEffect(() => {
-    localStorage.setItem(LS_NAME, name);
+    sessionStorage.setItem(LS_NAME, name);
   }, [name]);
 
   useEffect(() => {
@@ -488,12 +528,14 @@ export default function App() {
     <div
       style={{
         display: "flex",
+        flexWrap: "wrap",
         gap: 16,
         padding: 16,
         fontFamily: "system-ui, sans-serif",
+        alignItems: "flex-start",
       }}
     >
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: "1 1 0", minWidth: 420 }}>
         <h2>2D Optimization (Frontend MVP)</h2>
 
         <div style={{ marginBottom: 12 }}>
@@ -513,7 +555,7 @@ export default function App() {
           </button>
         </div>
 
-        {activeView === "teacher" && (createdCode || code.trim()) && (
+        {activeView === "teacher" && hasTeacherSession && (
           <StatusBar
             mode="teacher"
             participantsCount={participantsCount}
@@ -541,7 +583,7 @@ export default function App() {
               selectedFunctionId={draftFunctionId}
               selectedGoal={draftGoal}
               selectedFunction={draftFunction}
-              bounds={bounds}
+              bounds={draftBounds}
               collapseSignal={collapseSignal}
               functionDescription={getFunctionDescription(
                 draftFunction?.id ?? null,
@@ -555,18 +597,21 @@ export default function App() {
               isCreatingSession={isCreatingSession}
             />
 
-            <TeacherActiveSessionPanel
-              createdCode={createdCode}
-              isAdmin={Boolean(adminToken)}
-              adminToken={adminToken}
-              joinLink={joinLink}
-              onEndSession={onEndSession}
-              isEndingSession={isEndingSession}
-              onStartRandomBot={onStartRandomBot}
-              isStartingBot={isStartingBot}
-              onStartHillClimbBot={onStartHillClimbBot}
-              isStartingHillClimbBot={isStartingHillClimbBot}
-            />
+            {hasTeacherSession && (
+              <TeacherActiveSessionPanel
+                createdCode={createdCode}
+                isAdmin={Boolean(adminToken)}
+                joinLink={joinLink}
+                revealed={revealed}
+                onEndSession={onEndSession}
+                onToggleReveal={onToggleReveal}
+                isEndingSession={isEndingSession}
+                onStartRandomBot={onStartRandomBot}
+                isStartingBot={isStartingBot}
+                onStartHillClimbBot={onStartHillClimbBot}
+                isStartingHillClimbBot={isStartingHillClimbBot}
+              />
+            )}
           </>
         )}
 
@@ -608,7 +653,7 @@ export default function App() {
                       hideDetails={true}
                       participantId={participantId}
                       sessionStatus={sessionStatus}
-                      bounds={bounds}
+                      bounds={activeBounds}
                       points={points}
                       onEvaluate={handleEvaluate}
                       extraParticipants={
@@ -668,14 +713,15 @@ export default function App() {
         )}
       </div>
 
-      {activeView === "teacher" && (
+      {activeView === "teacher" && hasTeacherSession && (
         <div
           style={{
-            width: 460,
+            width: 780,
+            minWidth: 680,
             display: "flex",
             flexDirection: "column",
             gap: 12,
-            maxHeight: "calc(100vh - 48px)",
+            alignSelf: "flex-start",
           }}
         >
           <div style={{ maxHeight: 260, overflow: "auto" }}>
@@ -685,15 +731,16 @@ export default function App() {
             />
           </div>
 
-          <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+          <div>
             <TeacherInspectPanel
-              sessionCode={createdCode || code}
+              sessionCode={createdCode}
               sessionStatus={sessionStatus}
-              bounds={bounds}
+              bounds={activeBounds}
               snapshot={teacherSnapshot}
               selectedPid={inspectPid}
               onSelectPid={setInspectPid}
               revealFunctionId={exportData?.reveal?.function_id ?? null}
+              revealed={revealed}
             />
           </div>
         </div>

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import PlotCanvas from "./PlotCanvas";
+import FunctionContourPlot from "./FunctionContourPlot";
+import FunctionSurfacePlot from "./FunctionSurfacePlot";
 import type { Bounds, SessionSnapshot, Point } from "../types";
 
 type Props = {
@@ -9,6 +11,7 @@ type Props = {
   snapshot: SessionSnapshot | null;
   selectedPid: string;
   revealFunctionId?: string | null;
+  revealed: boolean;
   onSelectPid: (pid: string) => void;
 };
 
@@ -19,11 +22,12 @@ export default function TeacherInspectPanel({
   snapshot,
   selectedPid,
   revealFunctionId,
+  revealed,
   onSelectPid,
 }: Props) {
   const participants = snapshot?.participants ?? [];
   const [visibleStep, setVisibleStep] = useState<number>(0);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showRevealPlots, setShowRevealPlots] = useState(false);
 
   useEffect(() => {
     if (participants.length === 0) return;
@@ -49,12 +53,20 @@ export default function TeacherInspectPanel({
     if (visibleStep > selected.clicks.length) {
       setVisibleStep(selected.clicks.length);
     }
-  }, [selectedPid, selected?.clicks.length, visibleStep]);
+  }, [selected, visibleStep]);
 
   useEffect(() => {
     if (!selected) return;
     setVisibleStep(selected.clicks.length);
   }, [selectedPid]);
+
+  useEffect(() => {
+    if (!revealed) {
+      setShowRevealPlots(false);
+    } else if (revealFunctionId) {
+      setShowRevealPlots(true);
+    }
+  }, [revealed, revealFunctionId]);
 
   const points: Point[] = useMemo(() => {
     if (!selected) return [];
@@ -70,6 +82,9 @@ export default function TeacherInspectPanel({
     if (points.length === 0) return null;
     return Math.min(...points.map((p) => p.z));
   }, [points]);
+
+  const canShowReveal = revealed && !!revealFunctionId;
+  const renderRevealPlots = canShowReveal && showRevealPlots;
 
   return (
     <div style={{ border: "1px solid #eee", padding: 12 }}>
@@ -132,7 +147,14 @@ export default function TeacherInspectPanel({
                 </label>
               </div>
 
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginBottom: 10,
+                  flexWrap: "wrap",
+                }}
+              >
                 <button onClick={() => setVisibleStep(0)}>Reset</button>
                 <button
                   onClick={() => setVisibleStep((s) => Math.max(0, s - 1))}
@@ -152,34 +174,71 @@ export default function TeacherInspectPanel({
                   Alles
                 </button>
               </div>
-              {sessionStatus === "ended" && revealFunctionId && (
+
+              {canShowReveal && (
                 <label
-                  style={{ fontSize: 12, display: "block", marginBottom: 10 }}
+                  style={{ fontSize: 12, display: "block", marginBottom: 12 }}
                 >
                   <input
                     type="checkbox"
-                    checked={showHeatmap}
-                    onChange={(e) => setShowHeatmap(e.target.checked)}
+                    checked={showRevealPlots}
+                    onChange={(e) => setShowRevealPlots(e.target.checked)}
                   />{" "}
-                  Funktions-Heatmap anzeigen
+                  Reveal-Plots anzeigen
                 </label>
               )}
             </>
           )}
 
-          <PlotCanvas
-            code={sessionCode}
-            participantId={selectedPid || "-"}
-            sessionStatus={sessionStatus}
-            bounds={bounds}
-            points={points}
-            showHeatmap={sessionStatus === "ended" && showHeatmap}
-            functionIdForHeatmap={revealFunctionId}
-            onEvaluate={async () => {}}
-            disableClick={true}
-            hideDetails={true}
-            size={360}
-          />
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: renderRevealPlots ? "1fr 1fr" : "1fr",
+              gap: 16,
+              alignItems: "start",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <PlotCanvas
+                code={sessionCode}
+                participantId={selectedPid || "-"}
+                sessionStatus={sessionStatus}
+                bounds={bounds}
+                points={points}
+                onEvaluate={async () => {}}
+                disableClick={true}
+                hideDetails={true}
+                size={340}
+              />
+            </div>
+
+            {renderRevealPlots && revealFunctionId && (
+              <div
+                style={{
+                  minWidth: 0,
+                  display: "grid",
+                  gridTemplateRows: "auto auto",
+                  gap: 16,
+                }}
+              >
+                <FunctionContourPlot
+                  functionId={revealFunctionId}
+                  points={points.map((p) => ({ x: p.x, y: p.y }))}
+                  height={300}
+                />
+
+                <FunctionSurfacePlot
+                  functionId={revealFunctionId}
+                  points={points.map((p) => ({
+                    x: p.x,
+                    y: p.y,
+                    z: p.z,
+                  }))}
+                  height={320}
+                />
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

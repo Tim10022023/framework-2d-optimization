@@ -6,17 +6,27 @@ services:
     container_name: opt2d-backend
     ports:
       - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./data/app.db
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:5173}
     volumes:
-      - ./backend/app.db:/app/backend/app.db
+      - opt2d_data:/app/backend/data
     restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:5173}
+        VITE_TEACHER_PIN: ${VITE_TEACHER_PIN:-3736283747}
     container_name: opt2d-frontend
     ports:
       - "5173:80"
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  opt2d_data:

@@ -1,13 +1,12 @@
 # Framework 2D Optimization
 
-Interaktives Lehr- und Demonstrationstool für 2D-Optimierungsprobleme mit Dozenten- und Teilnehmeransicht, Vergleichsbots, Reveal nach Session-Ende und lokalem Python-Bot-Template für Studierende.
+Interaktives Lehr- und Demonstrationstool für **2D-Optimierungsprobleme** mit Dozenten- und Teilnehmeransicht, Vergleichsbots, Reveal nach Session-Ende und lokalem Python-Bot-Template für Studierende.
 
----
+Das Projekt ist primär als **didaktisches Demo- und Lehrtool** gedacht: Studierende optimieren eine unbekannte 2D-Funktion als Blackbox, während Dozierende den Verlauf beobachten, analysieren und nach Session-Ende den Reveal anzeigen können.
 
 ## Projektidee
 
-Studierende optimieren eine unbekannte 2D-Funktion als **Blackbox**.  
-Sie sehen während der Session **nicht** die eigentliche Funktion, sondern nur ihre eigenen Abfragen `(x, y)` und die zugehörigen Funktionswerte `z`.
+Studierende optimieren eine unbekannte 2D-Funktion als **Blackbox**. Während der Session sehen sie nicht die eigentliche Funktion, sondern nur ihre Abfragen `(x, y)` und die zugehörigen Funktionswerte `z`.
 
 Der Dozent kann:
 - Sessions konfigurieren
@@ -16,11 +15,9 @@ Der Dozent kann:
 - Pfade Schritt für Schritt analysieren
 - nach Session-Ende den Reveal anzeigen
 
-Zusätzlich können Studierende einen **lokalen Python-Bot** gegen die laufende Session ausführen.
+Zusätzlich können Studierende einen lokalen Python-Bot gegen die laufende Session ausführen.
 
----
-
-## Features
+## Aktueller Funktionsumfang
 
 ### Backend
 - FastAPI REST API
@@ -28,7 +25,7 @@ Zusätzlich können Studierende einen **lokalen Python-Bot** gegen die laufende 
 - Sessions erstellen / joinen / evaluieren / beenden / exportieren
 - Leaderboard
 - Snapshot für Pfad-Ansichten
-- max. Klickanzahl pro Session
+- maximale Klickanzahl pro Session
 - interne Vergleichsbots:
   - Random Search
   - Hill Climb
@@ -40,76 +37,61 @@ Zusätzlich können Studierende einen **lokalen Python-Bot** gegen die laufende 
 - Join per Code
 - QR-Code / Beamer Mode
 - Live-Leaderboard
-- Teilnehmer-Pfad-Inspector
+- Teilnehmer-/Bot-Pfad-Inspector
 - Schritt-für-Schritt-Debugging per Slider
 - Reveal / Export nach Session-Ende
-- Bot-Pfade optional im Teilnehmer-UI
+- optionale Bot-Pfade im Teilnehmer-UI
+- Heatmap-Overlay im Inspector als Bonus nach Reveal
 - tab-lokale Rollen-/Sessionzustände per `sessionStorage`
 
-### Blackbox / Bot
-- `blackbox_client.py` als einfache Python-API
-- `student_bot_template.py` als Template für eigene lokale Optimierungsalgorithmen
-
----
+### Bot / Blackbox
+- `bot/blackbox_client.py` als einfache Python-API
+- `bot/student_bot_template.py` als Template für eigene lokale Optimierungsalgorithmen
+- `bot/stress_test.py` für parallele Lasttests
 
 ## Projektstruktur
 
 ```text
 framework-2d-optimization/
 ├─ backend/
-│  ├─ app/
-│  ├─ requirements.txt
-│  └─ ...
 ├─ frontend/
-│  ├─ src/
-│  └─ ...
 ├─ docs/
-│  ├─ participant_guide.md
-│  ├─ teacher_guide.md
-│  └─ student_bot_guide.md
 ├─ bot/
-│  ├─ blackbox_client.py
-│  └─ student_bot_template.py
 ├─ docker-compose.yaml
 ├─ Dockerfile
-├─ dev_log.md
-└─ README.md
+├─ README.md
+└─ dev_log.md
 ```
 
----
+## Schnellstart
 
-## Backend starten
+### Docker Compose (empfohlen)
 
-### Docker
 ```powershell
 docker compose up --build
 ```
 
-Backend:
-- Docs: `http://localhost:8000/docs`
+Danach erreichbar unter:
+- Frontend: `http://localhost:5173`
+- Backend API: `http://localhost:8000`
+- Swagger Docs: `http://localhost:8000/docs`
 - Health: `http://localhost:8000/health`
 
-Logs:
-```powershell
-docker compose logs -f backend
-```
+Frontend und Backend laufen gemeinsam per Docker Compose. Für den normalen Projektstart ist das der empfohlene Weg.
 
-Restart:
-```powershell
-docker compose restart backend
-```
+## Lokaler Start ohne Docker
 
-### Lokal
+### Backend
+
 ```powershell
-.\backend\.venv\Scripts\Activate.ps1
 cd backend
 pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
----
+Falls lokal mit virtueller Umgebung gearbeitet wird, diese vorher aktivieren.
 
-## Frontend starten
+### Frontend
 
 ```powershell
 cd frontend
@@ -117,17 +99,26 @@ npm install
 npm run dev
 ```
 
-Frontend:
+Frontend lokal:
 - `http://localhost:5173`
 
-### Frontend `.env`
+## Frontend-Umgebungsvariablen
+
+`frontend/.env`
 ```env
 VITE_API_URL=http://localhost:8000
 VITE_PUBLIC_APP_URL=http://localhost:5173
-VITE_TEACHER_PIN=11335577
+VITE_TEACHER_PIN=3736283747
 ```
 
----
+`frontend/.env.production`
+```env
+VITE_API_URL=http://localhost:8000
+VITE_PUBLIC_APP_URL=http://localhost:5173
+VITE_TEACHER_PIN=3736283747
+```
+
+Hinweis: Für echtes Deployment sollte `VITE_API_URL` auf die produktive Backend-URL angepasst werden.
 
 ## Lokalen Student-Bot starten
 
@@ -140,22 +131,17 @@ Abhängigkeit:
 pip install requests
 ```
 
-Session-Code in `student_bot_template.py` eintragen und dann starten:
+Session-Code in `student_bot_template.py` eintragen und starten:
 
 ```powershell
 python bot\student_bot_template.py
 ```
 
-Der Bot:
-- joint als Bot die Session
-- evaluiert Punkte blind
-- erscheint im Leaderboard und im Dozenten-Inspector
-
----
+Hinweis:
+Der Bot startet nur bei aktiver Session (`status=running`).
 
 ## Verfügbare Funktionen
 
-Aktueller finaler Katalog:
 - Sphere (verschoben)
 - Booth
 - Himmelblau
@@ -164,10 +150,8 @@ Aktueller finaler Katalog:
 - Rastrigin (verschoben)
 - Schwefel
 - Levy
-- Griewank (negiert, verschoben)
+- Griewank (negiert / verschoben, Maximierung)
 - Easom
-
----
 
 ## Typischer Ablauf
 
@@ -190,60 +174,36 @@ Aktueller finaler Katalog:
 3. Bot starten
 4. Verlauf beobachten
 
----
+## Stresstest / Skalierbarkeit
 
-## Guides
+Bisherige Einordnung:
+- 5 Bots: stabil
+- 10 Bots: gut nutzbar
+- 20 Bots: deutlich langsamer, aber ohne Fehler
+- 50 aggressive Bots: Timeouts / Grenze des aktuellen Setups
+
+Fazit:
+- geeignet für Vorlesung / kleine bis mittlere Gruppen
+- nicht für hohe Parallelität optimiert
+
+Die detailliertere technische Einordnung steht in `dev_log.md`.
+
+## Deployment-Hinweis
+
+Aktueller Stand:
+- Backend ist Docker-ready
+- Frontend ist ebenfalls containerisiert
+- Full Stack läuft per Docker Compose
+- SQLite bleibt per `app.db` persistent
+
+Deployment-/Hosting-Notizen und Portainer-Hinweise können als separate Betriebsdokumentation ergänzt werden.
+
+## Weitere Dokumente
 
 Im Ordner `docs/`:
 - `participant_guide.md`
 - `teacher_guide.md`
 - `student_bot_guide.md`
 
----
-
-## Deployment-Hinweis
-
-Aktueller Stand:
-- Backend ist Docker-ready
-- Frontend läuft aktuell als Vite-Frontend
-- nächster sinnvoller Deployment-Schritt: Frontend ebenfalls containerisieren
-
-Für späteren Betrieb über Portainer empfiehlt sich:
-- fertige Docker-Container/Images
-- saubere Compose-/Stack-Konfiguration
-- optional getrennte Produktionskonfiguration für Backend + Frontend
-
----
-
-## Technische Einordnung
-
-Der aktuelle Stand ist gut geeignet für:
-- Vorlesungen
-- kleine bis mittlere Gruppen
-- Vergleich von Menschen und Bots
-- Demonstrationen von Optimierungsstrategien
-
-Für größere Lasttests wären später sinnvoll:
-- systematischere Stress-Tests
-- ggf. weniger Polling / effizientere Updates
-- ggf. robustere Persistenz als SQLite bei hoher Parallelität
-
----
-
-## Status
-
-Der Projektstand umfasst bereits:
-- Sessions
-- Persistenz
-- Dozenten-/Teilnehmer-UI
-- Reveal
-- Bots
-- lokalen Python-Bot
-- Schritt-für-Schritt-Pfadinspektion
-
-Offene nächste Themen:
-- Doku finalisieren
-- Stress-Tests
-- Frontend-Container
-- Portainer-Deployment
-- weitere UI-Politur
+Zusätzlich:
+- `dev_log.md` für technischen Verlauf, Stresstest und Skalierungseinordnung

@@ -1,5 +1,5 @@
 import type { ExportData } from "../types";
-
+import FunctionSurfacePlot from "./FunctionSurfacePlot";
 type Props = {
   exportData: ExportData | null;
 };
@@ -41,7 +41,12 @@ export default function ExportPanel({ exportData }: Props) {
             </div>
           )}
 
-          {revealImageUrl && (
+          {exportData.function?.id ? (
+            <FunctionSurfacePlot
+              functionId={exportData.function.id}
+              height={420}
+            />
+          ) : revealImageUrl ? (
             <div style={{ marginBottom: 10 }}>
               <img
                 src={revealImageUrl}
@@ -53,7 +58,7 @@ export default function ExportPanel({ exportData }: Props) {
                 }}
               />
             </div>
-          )}
+          ) : null}
         </div>
       )}
 

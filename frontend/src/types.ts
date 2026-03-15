@@ -66,6 +66,7 @@ export type SessionInfo = {
   participants: number;
   status: string;
   max_steps: number;
+  revealed: boolean;
 };
 
 export type SnapshotClick = { x: number; y: number; z: number };

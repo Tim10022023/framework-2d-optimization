@@ -10,8 +10,6 @@ type PlotCanvasProps = {
   points: Point[];
   disableClick?: boolean;
   size?: number;
-  showHeatmap?: boolean;
-  functionIdForHeatmap?: string | null;
   extraParticipants?: {
     name: string;
     isBot?: boolean;
@@ -50,8 +48,6 @@ export default function PlotCanvas({
   sessionStatus,
   bounds,
   points,
-  showHeatmap = false,
-  functionIdForHeatmap = null,
   extraParticipants,
   onEvaluate,
 }: PlotCanvasProps) {
@@ -83,41 +79,6 @@ export default function PlotCanvas({
     const h = c.height;
 
     ctx.clearRect(0, 0, w, h);
-
-    if (showHeatmap && functionIdForHeatmap) {
-      const cells = 36;
-      const cellW = w / cells;
-      const cellH = h / cells;
-
-      const values: number[] = [];
-
-      for (let gy = 0; gy < cells; gy++) {
-        for (let gx = 0; gx < cells; gx++) {
-          const x =
-            bounds.xmin + ((gx + 0.5) / cells) * (bounds.xmax - bounds.xmin);
-          const y =
-            bounds.ymax - ((gy + 0.5) / cells) * (bounds.ymax - bounds.ymin);
-
-          values.push(evaluateHeatmapFunction(functionIdForHeatmap, x, y));
-        }
-      }
-
-      const minV = Math.min(...values);
-      const maxV = Math.max(...values);
-      const range = Math.max(1e-9, maxV - minV);
-
-      let idx = 0;
-      for (let gy = 0; gy < cells; gy++) {
-        for (let gx = 0; gx < cells; gx++) {
-          const v = values[idx++];
-          const normalized = (v - minV) / range;
-
-          ctx.fillStyle = valueToHeatColor(normalized);
-          ctx.fillRect(gx * cellW, gy * cellH, cellW + 1, cellH + 1);
-        }
-      }
-    }
-
     const zeroX = ((0 - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
     const zeroY = (1 - (0 - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
 
@@ -279,66 +240,6 @@ export default function PlotCanvas({
 
     const { x, y } = canvasPixelToCoords(xPix, yPix, c.width, c.height);
     await onEvaluate(Number(x.toFixed(4)), Number(y.toFixed(4)));
-  }
-
-  function evaluateHeatmapFunction(
-    functionId: string,
-    x: number,
-    y: number,
-  ): number {
-    switch (functionId) {
-      case "sphere_shifted":
-        return (x - 3.7) ** 2 + (y + 2.1) ** 2;
-
-      case "booth":
-        return (x + 2 * y - 7) ** 2 + (2 * x + y - 5) ** 2;
-
-      case "himmelblau":
-        return (x * x + y - 11) ** 2 + (x + y * y - 7) ** 2;
-
-      case "rosenbrock":
-        return (1 - x) ** 2 + 100 * (y - x * x) ** 2;
-
-      case "rastrigin_shifted": {
-        const xs = x - 2.5;
-        const ys = y + 1.7;
-        return (
-          20 +
-          xs ** 2 -
-          10 * Math.cos(2 * Math.PI * xs) +
-          ys ** 2 -
-          10 * Math.cos(2 * Math.PI * ys)
-        );
-      }
-
-      case "levy": {
-        const w1 = 1 + (x - 1) / 4;
-        const w2 = 1 + (y - 1) / 4;
-        return (
-          Math.sin(Math.PI * w1) ** 2 +
-          (w1 - 1) ** 2 * (1 + 10 * Math.sin(Math.PI * w1 + 1) ** 2) +
-          (w2 - 1) ** 2 * (1 + Math.sin(2 * Math.PI * w2) ** 2)
-        );
-      }
-
-      case "easom":
-        return (
-          -Math.cos(x) *
-          Math.cos(y) *
-          Math.exp(-((x - Math.PI) ** 2 + (y - Math.PI) ** 2))
-        );
-
-      default:
-        return 0;
-    }
-  }
-
-  function valueToHeatColor(t: number): string {
-    const clamped = Math.max(0, Math.min(1, t));
-    const r = Math.round(255 * clamped);
-    const b = Math.round(255 * (1 - clamped));
-    const g = 80;
-    return `rgba(${r}, ${g}, ${b}, 0.22)`;
   }
 
   function onCanvasMove(ev: React.MouseEvent<HTMLCanvasElement>) {

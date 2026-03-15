@@ -1,58 +1,81 @@
-# Dozenten-Guide
+# Teacher Guide
+
+Diese Kurzanleitung richtet sich an Dozierende bzw. die administrierende Rolle im Framework **2D Optimization**.
 
 ## Ziel
-Eine Session konfigurieren, Studierende beitreten lassen, Verläufe beobachten und am Ende den Reveal anzeigen.
 
-## Ablauf
+Als Dozent verwaltest du eine Session, beobachtest Teilnehmer und Bots und führst nach Session-Ende den Reveal durch.
 
-### 1. Session erstellen
-Im Dozentenbereich:
-- PIN eingeben
-- Funktion wählen
-- Ziel (`min` oder `max`) wählen
-- maximale Klickanzahl festlegen
-- **Neue Session erstellen**
+## Session starten
 
-### 2. Session freigeben
-Nach dem Erstellen:
-- Session-Code anzeigen
-- QR-Code nutzen
-- optional **Beamer Mode** aktivieren
+1. Frontend öffnen
+2. in die Dozentenansicht wechseln
+3. Funktions-ID auswählen
+4. Session konfigurieren
+5. Session erstellen
 
-Wichtig:
-- Teilnehmende benötigen nur den Code bzw. QR-Link
-- Funktionsdetails werden dabei nicht offengelegt
+Typische Konfigurationspunkte:
+- Name / Bezeichnung
+- verwendete Funktion
+- maximale Schrittzahl
+- optionale Bot-Nutzung
 
-### 3. Session beobachten
-Während der Session:
+Nach dem Start wird ein Session-Code erzeugt.
+
+## Teilnehmerzugang
+
+Teilnehmende können über:
+- den Session-Code oder
+- den QR-Code / Beamer Mode
+
+einer Session beitreten.
+
+## Während der Session
+
+In der Dozentenansicht kannst du:
 - Leaderboard beobachten
-- einzelne Teilnehmer oder Bots auswählen
-- Pfade im Inspector ansehen
-- Verlauf Schritt für Schritt über den Slider debuggen
+- Teilnehmer und Bots unterscheiden
+- Teilnehmerpfade inspizieren
+- Bot-Pfade inspizieren
+- Schritt-für-Schritt-Debugging per Slider verwenden
 
-### 4. Bots starten
-Im Bereich **Bots** können Vergleichsbots gestartet werden:
-- Random Search Bot
-- Hill Climb Bot
+Je nach UI-Stand stehen zusätzlich zur Verfügung:
+- QR / Beamer Mode
+- tab-lokale Rollen-/Sessionzustände
+- optionale Bot-Markierung
+- Heatmap-Overlay im Inspector als Bonus
 
-Einstellbar:
-- Anzahl Klicks
-- Seed (optional)
-- Step Size (Hill Climb)
-- Delay in Millisekunden
+## Leaderboard und Verlauf
 
-### 5. Session beenden
-- **Session beenden + Export laden**
-- danach Reveal / Export prüfen
+Das Leaderboard aktualisiert sich während der laufenden Session.  
+Der Inspector erlaubt es, einzelne Teilnehmer oder Bots auszuwählen und deren Verlauf schrittweise nachzuvollziehen.
 
-### 6. Reveal
-Nach Session-Ende werden angezeigt:
-- Funktionsname
-- Beschreibung
-- Reveal-Bild / Plot
-- Teilnehmerdaten / Ergebnisübersicht
+Damit lassen sich unter anderem analysieren:
+- welche Punkte ausprobiert wurden
+- wie sich der bestgefundene Wert entwickelt hat
+- wie sich Mensch und Bot unterscheiden
 
-## Wichtige Hinweise
-- Der Dozenten-Tab ist für Moderation und Auswertung gedacht.
-- Teilnehmer sehen die Funktion während der Session nicht.
-- Lokale Python-Bots von Studierenden erscheinen wie normale Teilnehmer/Bots in der Session.
+## Session beenden
+
+Wenn die aktive Phase abgeschlossen ist:
+
+1. Session beenden
+2. Reveal laden bzw. anzeigen
+3. Export prüfen
+
+Nach dem Session-Ende können Reveal und Export nach Refresh im Dozenten-UI erneut geladen werden.
+
+## Reveal
+
+Nach dem Ende der Session stehen zusätzliche Informationen zur Verfügung, zum Beispiel:
+- Funktionsbild / Plot
+- Exportdaten
+- detailliertere Analyse des Suchverlaufs
+
+Die Heatmap im Inspector ist dabei als Bonusfunktion zu verstehen.
+
+## Hinweise
+
+- Teilnehmer sehen während der Session keine Funktionsdetails
+- Bots sind im UI markiert
+- das Tool ist vor allem für Demo-, Lehr- und kleinere bis mittlere Gruppenszenarien gedacht

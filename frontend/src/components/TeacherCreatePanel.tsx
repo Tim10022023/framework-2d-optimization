@@ -40,7 +40,7 @@ export default function TeacherCreatePanel({
 }: Props) {
   const [pinInput, setPinInput] = useState("");
   const pinOk = !teacherPin || pinInput === teacherPin;
-  const [isOpen, setIsOpen] = useState(false); // default zu
+  const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
     if (collapseSignal !== undefined) setIsOpen(false);
@@ -52,41 +52,27 @@ export default function TeacherCreatePanel({
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: "flex-start",
+          gap: 12,
+          marginBottom: isOpen ? 10 : 0,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>
-              Session konfigurieren
-            </div>
-            {!isOpen && (
-              <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>
-                Draft: <b>{selectedFunction?.name ?? selectedFunctionId}</b> •
-                Ziel: <b>{selectedGoal}</b> • Max: <b>{maxSteps}</b>
-              </div>
-            )}
-          </div>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Session erstellen</div>
+        </div>
 
-          <button onClick={() => setIsOpen((v) => !v)}>
-            {isOpen ? "Einklappen" : "Ausklappen"}
-          </button>
-        </div>
+        <button onClick={() => setIsOpen((v) => !v)}>
+          {isOpen ? "Einklappen" : "Ausklappen"}
+        </button>
       </div>
-      {isOpen && (
-        <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
-          Funktion und Ziel festlegen und eine neue Session starten.
-        </div>
-      )}
 
       {isOpen && (
         <>
+          <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
+            Funktion, Ziel und maximale Klickzahl festlegen und eine neue
+            Session starten.
+          </div>
+
           <div style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 12 }}>
               Dozenten-PIN
@@ -103,6 +89,7 @@ export default function TeacherCreatePanel({
                 }}
               />
             </label>
+
             {!pinOk && (
               <div style={{ fontSize: 12, color: "crimson", marginTop: 4 }}>
                 PIN falsch – Session erstellen ist gesperrt.
@@ -181,9 +168,7 @@ export default function TeacherCreatePanel({
               onClick={onCreateSession}
               disabled={isCreatingSession || !pinOk}
             >
-              {isCreatingSession
-                ? "Erstelle Session..."
-                : "Neue Session erstellen"}
+              {isCreatingSession ? "Erstelle Session..." : "Session erstellen"}
             </button>
           </div>
         </>
