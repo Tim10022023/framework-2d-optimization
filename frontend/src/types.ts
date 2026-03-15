@@ -64,4 +64,24 @@ export type SessionInfo = {
   goal: string;
   participants: number;
   status: string;
+  max_steps: number;
+};
+
+export type SnapshotClick = { x: number; y: number; z: number };
+
+export type SnapshotParticipant = {
+  participant_id: string;
+  name: string;
+  is_bot: boolean;
+  found: boolean;
+  found_step: number | null;
+  clicks: SnapshotClick[];
+};
+
+export type SessionSnapshot = {
+  session_code: string;
+  status: string;
+  function_id: string;
+  goal: string;
+  participants: SnapshotParticipant[];
 };

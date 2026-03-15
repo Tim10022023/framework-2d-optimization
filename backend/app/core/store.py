@@ -32,6 +32,7 @@ class Session:
     function_id: str
     goal: str
     admin_token: str
+    max_steps: int
     status: str = "running"
     participants: Dict[str, Participant] = field(default_factory=dict)
 
@@ -47,7 +48,7 @@ def new_code() -> str:
     return uuid4().hex[:6].upper()
 
 
-def create_session(function_id: str, goal: str) -> Session:
+def create_session(function_id: str, goal: str, max_steps: int) -> Session:
     code = new_code()
     admin_token = uuid4().hex
 
@@ -59,6 +60,7 @@ def create_session(function_id: str, goal: str) -> Session:
             goal=goal,
             admin_token=admin_token,
             status="running",
+            max_steps=max_steps,
         )
         db.add(db_session)
         db.commit()
@@ -71,6 +73,7 @@ def create_session(function_id: str, goal: str) -> Session:
             admin_token=db_session.admin_token,
             status=db_session.status,
             participants={},
+            max_steps=db_session.max_steps
         )
     finally:
         db.close()
@@ -105,11 +108,12 @@ def get_session(code: str) -> Optional[Session]:
             admin_token=db_session.admin_token,
             status=db_session.status,
             participants=participants,
+            max_steps=db_session.max_steps
         )
     finally:
         db.close()
 
-def join_session(code: str, name: str) -> Participant:
+def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
     db = SessionLocal()
     try:
         db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
@@ -120,6 +124,7 @@ def join_session(code: str, name: str) -> Participant:
 
         db_participant = ParticipantModel(
             participant_code=pid,
+            is_bot=is_bot,
             name=name,
             session_id=db_session.id,
         )
@@ -156,6 +161,8 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
             raise KeyError("participant not found")
 
         current_clicks = sorted(db_participant.clicks, key=lambda c: c.step)
+        if len(current_clicks) >= db_session.max_steps:
+            raise ValueError("max steps reached")
         step = len(current_clicks) + 1
 
         db_click = ClickModel(
@@ -285,6 +292,7 @@ def set_session_status(code: str, status: str) -> Session:
             admin_token=db_session.admin_token,
             status=db_session.status,
             participants=participants,
+            max_steps=db_session.max_steps
         )
     finally:
         db.close()

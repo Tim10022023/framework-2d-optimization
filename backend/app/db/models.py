@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean
 
 from app.db.session import Base
 
@@ -13,6 +14,7 @@ class SessionModel(Base):
     goal = Column(String, nullable=False)
     admin_token = Column(String, nullable=False)
     status = Column(String, default="running", nullable=False)
+    max_steps = Column(Integer, nullable=False, default=30)
 
     participants = relationship("ParticipantModel", back_populates="session", cascade="all, delete-orphan")
 
@@ -25,6 +27,7 @@ class ParticipantModel(Base):
     name = Column(String, nullable=False)
     found_step = Column(Integer, nullable=True)
     found_z = Column(Float, nullable=True)
+    is_bot = Column(Boolean, nullable=False, default=False)
 
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False)
     session = relationship("SessionModel", back_populates="participants")

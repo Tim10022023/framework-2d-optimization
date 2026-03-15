@@ -2,20 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import type { Bounds, Point } from "../types";
 
 type PlotCanvasProps = {
+  hideDetails?: boolean;
   code: string;
   participantId: string;
   sessionStatus: string;
   bounds: Bounds;
   points: Point[];
+  disableClick?: boolean;
+  size?: number;
+  extraParticipants?: {
+    name: string;
+    isBot: boolean;
+    clicks: { x: number; y: number }[];
+  }[];
   onEvaluate: (x: number, y: number) => Promise<void>;
 };
 
 export default function PlotCanvas({
   code,
+  size = 600,
+  hideDetails = false,
+  disableClick = false,
   participantId,
   sessionStatus,
   bounds,
   points,
+  extraParticipants,
   onEvaluate,
 }: PlotCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -53,6 +65,37 @@ export default function PlotCanvas({
     ctx.lineTo(w / 2, h);
     ctx.stroke();
 
+    // Extra Pfade (z.B. Bots / andere Teilnehmer)
+    if (extraParticipants && extraParticipants.length > 0) {
+      for (const ep of extraParticipants) {
+        if (!ep.clicks || ep.clicks.length < 2) continue;
+
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+
+        // Bots gestrichelt
+        if (ep.isBot) {
+          ctx.setLineDash([6, 6]);
+        } else {
+          ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+
+        ep.clicks.forEach((p, idx) => {
+          const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
+          const py =
+            (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
+
+          if (idx === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     // Pfadlinie
     if (points.length >= 2) {
       ctx.beginPath();
@@ -71,18 +114,49 @@ export default function PlotCanvas({
       ctx.stroke();
     }
 
+    // bester Punkt bestimmen (min z)
+    let bestIndex = -1;
+    if (points.length > 0) {
+      let bestZ = points[0].z;
+      bestIndex = 0;
+      for (let i = 1; i < points.length; i++) {
+        if (points[i].z < bestZ) {
+          bestZ = points[i].z;
+          bestIndex = i;
+        }
+      }
+    }
+
     // Punkte
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
       const py = (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
 
+      const isLast = i === points.length - 1;
+      const isBest = i === bestIndex;
+
+      const radius = isLast ? 6 : i === 0 ? 3 : 4;
+
       ctx.beginPath();
-
-      const radius = i === points.length - 1 ? 6 : i === 0 ? 3 : 4;
-
       ctx.arc(px, py, radius, 0, Math.PI * 2);
+
+      // Farbe setzen
+      ctx.save();
+      if (isBest) {
+        ctx.fillStyle = "green";
+      }
       ctx.fill();
+      ctx.restore();
+
+      // optional: letzten Punkt umranden
+      if (isLast) {
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "black";
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // Label für letzten Punkt
@@ -93,11 +167,11 @@ export default function PlotCanvas({
 
       ctx.fillText(`#${last.step}`, px + 8, py - 8);
     }
-  }, [points, bounds]);
+  }, [points, bounds, extraParticipants]);
 
   async function onCanvasClick(ev: React.MouseEvent<HTMLCanvasElement>) {
     if (sessionStatus === "ended") return;
-
+    if (disableClick) return;
     const c = canvasRef.current;
     if (!c) return;
 
@@ -131,14 +205,18 @@ export default function PlotCanvas({
   return (
     <>
       <h3 style={{ marginBottom: 8 }}>Optimierungsfläche</h3>
-      <div style={{ marginBottom: 8, fontSize: 14 }}>
-        Session: <b>{code}</b> • Participant: <code>{participantId}</code>
-      </div>
+      {!hideDetails && (
+        <div style={{ marginBottom: 8, fontSize: 14 }}>
+          Session: <b>{code}</b> • Participant: <code>{participantId}</code>
+        </div>
+      )}
 
-      <div style={{ marginBottom: 8, fontSize: 12, opacity: 0.8 }}>
-        Klickbereich: x ∈ [{bounds.xmin}, {bounds.xmax}], y ∈ [{bounds.ymin},{" "}
-        {bounds.ymax}]
-      </div>
+      {!hideDetails && (
+        <div style={{ marginBottom: 8, fontSize: 12, opacity: 0.8 }}>
+          Klickbereich: x ∈ [{bounds.xmin}, {bounds.xmax}], y ∈ [{bounds.ymin},{" "}
+          {bounds.ymax}]
+        </div>
+      )}
 
       <div style={{ marginBottom: 8, fontSize: 12 }}>
         Status: <b>{sessionStatus}</b>
@@ -151,8 +229,8 @@ export default function PlotCanvas({
 
       <canvas
         ref={canvasRef}
-        width={600}
-        height={600}
+        width={size}
+        height={size}
         onClick={onCanvasClick}
         onMouseMove={onCanvasMove}
         onMouseLeave={onCanvasLeave}

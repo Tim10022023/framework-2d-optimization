@@ -4,6 +4,7 @@ import type {
   FunctionSpec,
   JoinResponse,
   SessionInfo,
+  SessionSnapshot,
 } from "./types";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -59,13 +60,18 @@ export async function getLeaderboard(code: string) {
 }
 
 export async function createSession(
-  function_id: string,
+  functionId: string,
   goal: "min" | "max",
+  maxSteps: number,
 ): Promise<CreateSessionResponse> {
   const res = await fetch(`${API_URL}/sessions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ function_id, goal }),
+    body: JSON.stringify({
+      function_id: functionId,
+      goal,
+      max_steps: maxSteps,
+    }),
   });
   if (!res.ok) throw new Error(await readErrorMessage(res));
   return res.json();
@@ -96,6 +102,52 @@ export async function getFunctions(): Promise<{ functions: FunctionSpec[] }> {
 
 export async function getSessionInfo(code: string): Promise<SessionInfo> {
   const res = await fetch(`${API_URL}/sessions/${code}`);
+  if (!res.ok) throw new Error(await readErrorMessage(res));
+  return res.json();
+}
+
+export async function startRandomBot(code: string, n: number, seed?: number) {
+  const params = new URLSearchParams();
+  params.set("n", String(n));
+  if (seed !== undefined && seed !== null) params.set("seed", String(seed));
+
+  const res = await fetch(
+    `${API_URL}/sessions/${code}/bots/random_search?${params.toString()}`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!res.ok) throw new Error(await readErrorMessage(res));
+  return res.json();
+}
+
+export async function startHillClimbBot(
+  code: string,
+  n: number,
+  stepSize: number,
+  seed?: number,
+) {
+  const params = new URLSearchParams();
+  params.set("n", String(n));
+  params.set("step_size", String(stepSize));
+  if (seed !== undefined && seed !== null) params.set("seed", String(seed));
+
+  const res = await fetch(
+    `${API_URL}/sessions/${code}/bots/hill_climb?${params.toString()}`,
+    {
+      method: "POST",
+    },
+  );
+
+  if (!res.ok) throw new Error(await readErrorMessage(res));
+  return res.json();
+}
+
+export async function getSessionSnapshot(
+  code: string,
+): Promise<SessionSnapshot> {
+  const res = await fetch(`${API_URL}/sessions/${code}/snapshot`);
   if (!res.ok) throw new Error(await readErrorMessage(res));
   return res.json();
 }

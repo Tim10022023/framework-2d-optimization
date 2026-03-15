@@ -1,17 +1,20 @@
 type StatusBarProps = {
-  code: string;
-  name: string;
-  functionName: string;
+  mode: "teacher" | "participant";
+  participantsCount: number;
+  functionName?: string;
   goal: string;
   sessionStatus: string;
+  stepsUsed?: number;
+  maxSteps?: number;
 };
 
 export default function StatusBar({
-  code,
-  name,
-  functionName,
+  mode,
+  maxSteps,
+  participantsCount,
   goal,
   sessionStatus,
+  stepsUsed,
 }: StatusBarProps) {
   return (
     <div
@@ -24,9 +27,23 @@ export default function StatusBar({
         fontSize: 12,
       }}
     >
-      <b>Session:</b> {code || "-"} | <b>Name:</b> {name || "-"} |{" "}
-      <b>Funktion:</b> {functionName || "-"} | <b>Ziel:</b> {goal || "-"} |{" "}
+      <b>Teilnehmer:</b> {participantsCount} {" | "}
+      <b>Ziel:</b> {goal || "-"} {" | "}
       <b>Status:</b> {sessionStatus || "-"}
+      {typeof maxSteps === "number" && (
+        <>
+          {" | "}
+          <b>Max Klicks:</b> {maxSteps}
+        </>
+      )}
+      {mode === "participant" &&
+        typeof stepsUsed === "number" &&
+        typeof maxSteps === "number" && (
+          <>
+            {" | "}
+            <b>Klicks:</b> {stepsUsed}/{maxSteps}
+          </>
+        )}
     </div>
   );
 }

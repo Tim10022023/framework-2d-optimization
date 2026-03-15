@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
+import random
+import math
 
 from app.core.store import create_session, get_session, join_session, add_click, compute_leaderboard, set_session_status
-from app.core.functions import evaluate_function
-from app.core.functions import get_spec
+from app.core.functions import evaluate_function, get_spec
 
 
 
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 class CreateSessionBody(BaseModel):
     function_id: str = "sphere"
     goal: str = "min"  # "min" oder "max"
-
+    max_steps: int = 30
 
 @router.post("")
 def create_new_session(body: CreateSessionBody):
@@ -29,7 +30,7 @@ def create_new_session(body: CreateSessionBody):
     if body.goal not in spec.allowed_goals:
         raise HTTPException(status_code=400, detail=f"goal '{body.goal}' not allowed for function '{body.function_id}'")
 
-    s = create_session(function_id=body.function_id, goal=body.goal)
+    s = create_session(function_id=body.function_id, goal=body.goal, max_steps=body.max_steps)
     return {
     "session_code": s.code,
     "function_id": s.function_id,
@@ -51,16 +52,31 @@ def get_session_info(code: str):
     "goal": s.goal,
     "participants": len(s.participants),
     "status": s.status,
+    "max_steps": s.max_steps,
 }
+
+@router.get("/{code}/public")
+def get_public_session_info(code: str):
+    s = get_session(code)
+    if not s:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    return {
+        "session_code": s.code,
+        "participants": len(s.participants),
+        "status": s.status,
+        "max_steps": s.max_steps,
+    }
 
 class JoinSessionBody(BaseModel):
     name: str
+    is_bot: bool = False
 
 
 @router.post("/{code}/join")
 def join(code: str, body: JoinSessionBody):
     try:
-        p = join_session(code=code, name=body.name)
+        p = join_session(code=code, name=body.name, is_bot=body.is_bot)
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -86,7 +102,18 @@ def evaluate(code: str, body: EvaluateBody):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        result = add_click(code=code, participant_id=body.participant_id, x=body.x, y=body.y, z=z)
+        result = add_click(
+            code=code,
+            participant_id=body.participant_id,
+            x=body.x,
+            y=body.y,
+            z=z,
+        )
+    except ValueError as e:
+        # max steps reached
+        if str(e) == "max steps reached":
+            raise HTTPException(status_code=409, detail="max steps reached")
+        raise HTTPException(status_code=400, detail=str(e))
     except KeyError as e:
         msg = str(e)
         if "participant" in msg:
@@ -94,11 +121,11 @@ def evaluate(code: str, body: EvaluateBody):
         raise HTTPException(status_code=404, detail="session not found")
 
     return {
-    "x": body.x,
-    "y": body.y,
-    "z": z,
-    **result,
-}
+        "x": body.x,
+        "y": body.y,
+        "z": z,
+        **result,
+    }
 
 @router.get("/{code}/leaderboard")
 def leaderboard(code: str):
@@ -165,3 +192,161 @@ def export_session(code: str, x_admin_token: str = Header(default="")):
         "leaderboard": compute_leaderboard(code),
     }
 
+@router.post("/{code}/bots/random_search")
+def bot_random_search(code: str, n: int = 20, seed: int | None = None, delay_ms: int = 0):
+    s = get_session(code)
+    if not s:
+        raise HTTPException(status_code=404, detail="session not found")
+    if s.status == "ended":
+        raise HTTPException(status_code=409, detail="session ended")
+    if delay_ms < 0 or delay_ms > 5000:
+        raise HTTPException(status_code=400, detail="delay_ms must be between 0 and 5000")
+    if n <= 0 or n > 1000:
+        raise HTTPException(status_code=400, detail="n must be between 1 and 1000")
+
+    if seed is not None:
+        random.seed(seed)
+
+    # Bot beitreten (erscheint als Teilnehmer im Leaderboard)
+    bot_name = f"Bot-Random(n={n})"
+    try:
+        bot = join_session(code=code, name=bot_name)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    # Bounds aus FunctionSpec
+    spec = get_spec(s.function_id)
+    b = spec.bounds
+
+    # n zufällige Punkte evaluieren
+    for _ in range(n):
+        x = random.uniform(b["xmin"], b["xmax"])
+        y = random.uniform(b["ymin"], b["ymax"])
+        z = evaluate_function(s.function_id, x, y)
+        add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+        if delay_ms > 0:
+            import time
+            time.sleep(delay_ms / 1000.0)
+
+    return {
+        "session_code": code,
+        "bot_participant_id": bot.id,
+        "bot_name": bot.name,
+        "n": n,
+    }
+
+@router.post("/{code}/bots/hill_climb")
+def bot_hill_climb(
+    code: str,
+    n: int = 30,
+    step_size: float = 0.5,
+    seed: int | None = None,
+    delay_ms: int = 0,
+):
+    s = get_session(code)
+    if not s:
+        raise HTTPException(status_code=404, detail="session not found")
+    if s.status == "ended":
+        raise HTTPException(status_code=409, detail="session ended")
+    if delay_ms < 0 or delay_ms > 5000:
+        raise HTTPException(status_code=400, detail="delay_ms must be between 0 and 5000")
+    if n <= 0 or n > 2000:
+        raise HTTPException(status_code=400, detail="n must be between 1 and 2000")
+    if step_size <= 0:
+        raise HTTPException(status_code=400, detail="step_size must be > 0")
+
+    if seed is not None:
+        random.seed(seed)
+
+    bot_name = f"Bot-HillClimb(n={n},h={step_size})"
+    bot = join_session(code=code, name=bot_name)
+
+    spec = get_spec(s.function_id)
+    b = spec.bounds
+
+    # Startpunkt zufällig
+    x = random.uniform(b["xmin"], b["xmax"])
+    y = random.uniform(b["ymin"], b["ymax"])
+    z = evaluate_function(s.function_id, x, y)
+    add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+    if delay_ms > 0:
+        import time
+        time.sleep(delay_ms / 1000.0)
+
+    # Nachbarn (4er Kreuz)
+    def neighbors(cx: float, cy: float):
+        return [
+            (cx + step_size, cy),
+            (cx - step_size, cy),
+            (cx, cy + step_size),
+            (cx, cy - step_size),
+        ]
+
+    def clamp(v: float, vmin: float, vmax: float) -> float:
+        return max(vmin, min(vmax, v))
+
+    for _ in range(n - 1):
+        best_x, best_y, best_z = x, y, z
+
+        for nx, ny in neighbors(x, y):
+            nx = clamp(nx, b["xmin"], b["xmax"])
+            ny = clamp(ny, b["ymin"], b["ymax"])
+            nz = evaluate_function(s.function_id, nx, ny)
+
+            if s.goal == "min":
+                if nz < best_z:
+                    best_x, best_y, best_z = nx, ny, nz
+            else:
+                if nz > best_z:
+                    best_x, best_y, best_z = nx, ny, nz
+
+        # Wenn kein Nachbar besser: kleiner Schritt (optional)
+        if best_z == z:
+            step_size = step_size * 0.5
+            if step_size < 1e-6:
+                break
+        else:
+            x, y, z = best_x, best_y, best_z
+
+        add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+        if delay_ms > 0:
+            import time
+            time.sleep(delay_ms / 1000.0)
+
+    return {
+        "session_code": code,
+        "bot_participant_id": bot.id,
+        "bot_name": bot.name,
+        "n": n,
+        "final_step_size": step_size,
+    }
+
+@router.get("/{code}/snapshot")
+def session_snapshot(code: str):
+    s = get_session(code)
+    if not s:
+        raise HTTPException(status_code=404, detail="session not found")
+
+    participants = []
+    for p in s.participants.values():
+        participants.append(
+            {
+                "participant_id": p.id,
+                "name": p.name,
+                "is_bot": getattr(p, "is_bot", False),
+                "found": p.found_step is not None,
+                "found_step": p.found_step,
+                "clicks": [
+                    {"x": c.x, "y": c.y, "z": c.z, "step": i + 1}
+                    for i, c in enumerate(p.clicks)
+                ],
+            }
+        )
+
+    return {
+        "session_code": s.code,
+        "status": s.status,
+        "function_id": s.function_id,
+        "goal": s.goal,
+        "participants": participants,
+    }
