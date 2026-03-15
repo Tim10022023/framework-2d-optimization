@@ -20,9 +20,10 @@ class Click:
 class Participant:
     id: str
     name: str
-    clicks: List[Click] = field(default_factory=list)
-    found_step: Optional[int] = None
-    found_z: Optional[float] = None
+    is_bot: bool = False
+    clicks: list = field(default_factory=list)
+    found_step: int | None = None
+    found_z: float | None = None
 
 
 
@@ -97,6 +98,7 @@ def get_session(code: str) -> Optional[Session]:
                 id=p.participant_code,
                 name=p.name,
                 clicks=clicks,
+                is_bot=getattr(p, "is_bot", False),
                 found_step=p.found_step,
                 found_z=p.found_z,
             )
@@ -222,16 +224,16 @@ def compute_leaderboard(code: str) -> list[dict]:
             best_z = min(zs) if s.goal == "min" else max(zs)
 
         rows.append(
-            {
-                "participant_id": p.id,
-                "name": p.name,
-                "steps": len(p.clicks),
-                "best_z": best_z,
-                "found_step": p.found_step,
-                "found_z": p.found_z,
-                "found": p.found_step is not None,
-            }
-        )
+    {
+        "participant_id": p.id,
+        "name": p.name,
+        "is_bot": getattr(p, "is_bot", False),
+        "steps": len(p.clicks),
+        "best_z": best_z,
+        "found": p.found_step is not None,
+        "found_step": p.found_step,
+    }
+)
 
     # Sortierlogik:
     # 1) Found zuerst (found=True vor found=False)

@@ -1,8 +1,12 @@
 .git
-**/.venv
+.gitignore
 **/__pycache__
 **/*.pyc
 **/*.pyo
 **/*.pyd
-.vscode
-.idea
+**/.pytest_cache
+**/.mypy_cache
+**/.venv
+**/node_modules
+**/dist
+backend/app.db

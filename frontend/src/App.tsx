@@ -24,7 +24,7 @@ import StatusBar from "./components/StatusBar";
 import PointsListPanel from "./components/PointsListPanel";
 import StatsPanel from "./components/StatsPanel";
 
-import type { FunctionSpec, Point, SessionSnapshot } from "./types";
+import type { FunctionSpec, Point, SessionSnapshot, ExportData } from "./types";
 
 const LS_VIEW = "opt2d_view";
 const LS_CODE = "opt2d_code";
@@ -96,16 +96,17 @@ export default function App() {
   const [sessionMaxSteps, setSessionMaxSteps] = useState<number>(30);
 
   const [functions, setFunctions] = useState<FunctionSpec[]>([]);
-  const [selectedFunctionId, setSelectedFunctionId] = useState("sphere");
+  const [selectedFunctionId, setSelectedFunctionId] =
+    useState("sphere_shifted");
   const [selectedGoal, setSelectedGoal] = useState<"min" | "max">("min");
 
-  const [draftFunctionId, setDraftFunctionId] = useState("sphere");
+  const [draftFunctionId, setDraftFunctionId] = useState("sphere_shifted");
   const [draftGoal, setDraftGoal] = useState<"min" | "max">("min");
   const [draftMaxSteps, setDraftMaxSteps] = useState<number>(30);
 
   const [points, setPoints] = useState<Point[]>([]);
   const [leaderboard, setLeaderboard] = useState<any>(null);
-  const [exportData, setExportData] = useState<any>(null);
+  const [exportData, setExportData] = useState<ExportData | null>(null);
 
   const [showOnlyBots, setShowOnlyBots] = useState(false);
   const [snapshot, setSnapshot] = useState<SessionSnapshot | null>(null);
@@ -134,22 +135,32 @@ export default function App() {
     [draftFunction],
   );
 
+
   const publicAppUrl =
     import.meta.env.VITE_PUBLIC_APP_URL ?? window.location.origin;
   const joinLink = createdCode ? `${publicAppUrl}/?code=${createdCode}` : "";
-
   function getFunctionDescription(functionId: string | null) {
     switch (functionId) {
-      case "sphere":
-        return "Einfache, glatte Testfunktion mit einem klaren globalen Minimum.";
+      case "sphere_shifted":
+        return "Einfache glatte Testfunktion mit verschobenem globalem Minimum.";
+      case "booth":
+        return "Quadratische Benchmark-Funktion mit eindeutigem globalem Minimum.";
       case "himmelblau":
-        return "Multimodale Funktion mit mehreren gleich guten Minima.";
-      case "rastrigin":
-        return "Schwierigere Benchmark-Funktion mit vielen lokalen Minima.";
-      case "ackley":
-        return "Benchmark-Funktion mit vielen lokalen Strukturen und globalem Minimum im Zentrum.";
+        return "Multimodale Funktion mit mehreren gleich guten globalen Minima.";
       case "rosenbrock":
-        return "Klassische Tal-Funktion mit globalem Minimum bei (1,1), also nicht im Zentrum.";
+        return 'Klassische "Bananenfunktion" mit schmalem Tal.';
+      case "eggholder":
+        return "Sehr unruhige, multimodale Benchmark-Funktion.";
+      case "rastrigin_shifted":
+        return "Multimodale Benchmark-Funktion mit vielen lokalen Minima.";
+      case "schwefel":
+        return "Schwierige Benchmark-Funktion mit globalem Minimum fern vom Zentrum.";
+      case "levy":
+        return "Wellige Benchmark-Funktion mit globalem Minimum bei (1,1).";
+      case "griewank_negated_shifted":
+        return "Negierte und verschobene Griewank-Funktion als Maximierungsproblem.";
+      case "easom":
+        return "Funktion mit sehr scharfem globalem Minimum bei (π, π).";
       default:
         return "Keine Beschreibung verfügbar.";
     }
@@ -248,12 +259,12 @@ export default function App() {
     }
   }
 
-  async function onStartRandomBot(n: number, seed?: number) {
+  async function onStartRandomBot(n: number, seed?: number, delayMs?: number) {
     setError(null);
     setIsStartingBot(true);
 
     try {
-      await startRandomBot(code.trim(), n, seed);
+      await startRandomBot(code.trim(), n, seed, delayMs);
       const lb = await getLeaderboard(code.trim());
       setLeaderboard(lb);
     } catch (e: any) {
@@ -267,12 +278,13 @@ export default function App() {
     n: number,
     stepSize: number,
     seed?: number,
+    delayMs?: number,
   ) {
     setError(null);
     setIsStartingHillClimbBot(true);
 
     try {
-      await startHillClimbBot(code.trim(), n, stepSize, seed);
+      await startHillClimbBot(code.trim(), n, stepSize, seed, delayMs);
       const lb = await getLeaderboard(code.trim());
       setLeaderboard(lb);
     } catch (e: any) {
@@ -315,6 +327,25 @@ export default function App() {
       setDraftGoal(fn.allowed_goals[0] as "min" | "max");
     }
   }, [functions, draftFunctionId, draftGoal]);
+
+  useEffect(() => {
+    async function loadExportIfEnded() {
+      if (activeView !== "teacher") return;
+      if (!createdCode.trim()) return;
+      if (!adminToken.trim()) return;
+      if (sessionStatus !== "ended") return;
+      if (exportData) return;
+
+      try {
+        const data = await exportSession(createdCode.trim(), adminToken.trim());
+        setExportData(data);
+      } catch {
+        // bewusst still, damit das UI nicht spammt
+      }
+    }
+
+    loadExportIfEnded();
+  }, [activeView, createdCode, adminToken, sessionStatus, exportData]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -396,7 +427,7 @@ export default function App() {
       } catch {
         // ignore
       }
-    }, 1000);
+    }, 1500);
 
     return () => clearInterval(id);
   }, [activeSessionCode, activeView, showOnlyBots]);
@@ -588,7 +619,13 @@ export default function App() {
                               .map((p) => ({
                                 name: p.name,
                                 isBot: p.is_bot,
-                                clicks: p.clicks,
+                                color: undefined,
+                                clicks: p.clicks.map((c, idx) => ({
+                                  x: c.x,
+                                  y: c.y,
+                                  z: c.z,
+                                  step: idx + 1,
+                                })),
                               }))
                           : []
                       }
@@ -656,6 +693,7 @@ export default function App() {
               snapshot={teacherSnapshot}
               selectedPid={inspectPid}
               onSelectPid={setInspectPid}
+              revealFunctionId={exportData?.reveal?.function_id ?? null}
             />
           </div>
         </div>

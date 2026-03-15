@@ -1,80 +1,65 @@
-import { useState } from "react";
+import type { ExportData } from "../types";
 
-type ExportPanelProps = {
-  exportData: any;
+type Props = {
+  exportData: ExportData | null;
 };
 
-export default function ExportPanel({ exportData }: ExportPanelProps) {
-  const [showRawExport, setShowRawExport] = useState(false);
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
+export default function ExportPanel({ exportData }: Props) {
   if (!exportData) return null;
 
+  const revealImageUrl = exportData.reveal?.image
+    ? `${API_URL}${exportData.reveal.image}`
+    : null;
+
   return (
-    <div style={{ marginTop: 12, border: "1px solid #eee", padding: 12 }}>
-      <h3 style={{ marginTop: 0 }}>Reveal / Export nach Session-Ende</h3>
-      <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>
-        Zusammenfassung der beendeten Session mit Gewinner und Leaderboard.
-      </div>
-      <div style={{ fontSize: 12, marginBottom: 8 }}>
+    <div style={{ border: "1px solid #eee", padding: 12, marginTop: 12 }}>
+      <h3 style={{ marginTop: 0 }}>Reveal / Export</h3>
+
+      <div style={{ fontSize: 12, marginBottom: 10 }}>
         <div>
-          <b>Funktion:</b> {exportData.function?.name ?? "-"} (
-          {exportData.function?.id ?? "-"})
+          <b>Session:</b> {exportData.session_code}
         </div>
         <div>
-          <b>Ziel:</b> {exportData.goal ?? "-"}
+          <b>Status:</b> {exportData.status}
         </div>
         <div>
-          <b>Teilnehmer:</b> {exportData.participants?.length ?? 0}
+          <b>Ziel:</b> {exportData.goal}
         </div>
       </div>
 
-      {exportData.leaderboard?.length > 0 ? (
-        <>
-          <div style={{ marginBottom: 8 }}>
-            <b>Gewinner:</b> {exportData.leaderboard[0].name} (found_step:{" "}
-            {exportData.leaderboard[0].found_step ?? "-"}, best_z:{" "}
-            {exportData.leaderboard[0].best_z ?? "-"})
+      {exportData.reveal && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>
+            {exportData.reveal.title}
           </div>
 
-          <div style={{ fontSize: 12 }}>
-            <b>Top 5</b>
-            <ol style={{ marginTop: 6 }}>
-              {exportData.leaderboard.slice(0, 5).map((r: any) => (
-                <li key={r.participant_id} style={{ marginBottom: 4 }}>
-                  <b>{r.name}</b> — found: {String(r.found)} — found_step:{" "}
-                  {r.found_step ?? "-"} — steps: {r.steps} — best_z:{" "}
-                  {r.best_z ?? "-"}
-                </li>
-              ))}
-            </ol>
-          </div>
-        </>
-      ) : (
-        <div style={{ fontSize: 12 }}>Kein Leaderboard verfügbar.</div>
-      )}
+          {exportData.reveal.description && (
+            <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 10 }}>
+              {exportData.reveal.description}
+            </div>
+          )}
 
-      <div style={{ marginTop: 10 }}>
-        <button onClick={() => setShowRawExport((v) => !v)}>
-          {showRawExport ? "Raw JSON ausblenden" : "Raw JSON anzeigen"}
-        </button>
-      </div>
-
-      {showRawExport && (
-        <div
-          style={{
-            marginTop: 10,
-            fontSize: 12,
-            maxHeight: 260,
-            overflow: "auto",
-            border: "1px solid #eee",
-            padding: 8,
-          }}
-        >
-          <pre style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-            {JSON.stringify(exportData, null, 2)}
-          </pre>
+          {revealImageUrl && (
+            <div style={{ marginBottom: 10 }}>
+              <img
+                src={revealImageUrl}
+                alt={exportData.reveal.title}
+                style={{
+                  maxWidth: "100%",
+                  border: "1px solid #ddd",
+                  borderRadius: 8,
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
+
+      <div style={{ fontSize: 13 }}>
+        <b>Teilnehmer:</b> {exportData.participants.length}
+      </div>
     </div>
   );
 }

@@ -1,21 +1,37 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 import random
-import math
+import time
 
-from app.core.store import create_session, get_session, join_session, add_click, compute_leaderboard, set_session_status
+from app.core.store import (
+    add_click,
+    compute_leaderboard,
+    create_session,
+    get_session,
+    join_session,
+    set_session_status,
+)
 from app.core.functions import evaluate_function, get_spec
-
-
-
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 
 class CreateSessionBody(BaseModel):
-    function_id: str = "sphere"
-    goal: str = "min"  # "min" oder "max"
+    function_id: str = "sphere_shifted"
+    goal: str = "min"
     max_steps: int = 30
+
+
+class JoinSessionBody(BaseModel):
+    name: str
+    is_bot: bool = False
+
+
+class EvaluateBody(BaseModel):
+    participant_id: str
+    x: float
+    y: float
+
 
 @router.post("")
 def create_new_session(body: CreateSessionBody):
@@ -28,17 +44,23 @@ def create_new_session(body: CreateSessionBody):
         raise HTTPException(status_code=400, detail=str(e))
 
     if body.goal not in spec.allowed_goals:
-        raise HTTPException(status_code=400, detail=f"goal '{body.goal}' not allowed for function '{body.function_id}'")
+        raise HTTPException(
+            status_code=400,
+            detail=f"goal '{body.goal}' not allowed for function '{body.function_id}'",
+        )
 
-    s = create_session(function_id=body.function_id, goal=body.goal, max_steps=body.max_steps)
+    s = create_session(
+        function_id=body.function_id,
+        goal=body.goal,
+        max_steps=body.max_steps,
+    )
+
     return {
-    "session_code": s.code,
-    "function_id": s.function_id,
-    "goal": s.goal,
-    "admin_token": s.admin_token,
+        "session_code": s.code,
+        "function_id": s.function_id,
+        "goal": s.goal,
+        "admin_token": s.admin_token,
     }
-
-
 
 
 @router.get("/{code}")
@@ -46,14 +68,16 @@ def get_session_info(code: str):
     s = get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
+
     return {
-    "session_code": s.code,
-    "function_id": s.function_id,
-    "goal": s.goal,
-    "participants": len(s.participants),
-    "status": s.status,
-    "max_steps": s.max_steps,
-}
+        "session_code": s.code,
+        "function_id": s.function_id,
+        "goal": s.goal,
+        "participants": len(s.participants),
+        "status": s.status,
+        "max_steps": s.max_steps,
+    }
+
 
 @router.get("/{code}/public")
 def get_public_session_info(code: str):
@@ -68,10 +92,6 @@ def get_public_session_info(code: str):
         "max_steps": s.max_steps,
     }
 
-class JoinSessionBody(BaseModel):
-    name: str
-    is_bot: bool = False
-
 
 @router.post("/{code}/join")
 def join(code: str, body: JoinSessionBody):
@@ -80,12 +100,11 @@ def join(code: str, body: JoinSessionBody):
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
-    return {"participant_id": p.id, "name": p.name, "session_code": code}
-
-class EvaluateBody(BaseModel):
-    participant_id: str
-    x: float
-    y: float
+    return {
+        "participant_id": p.id,
+        "name": p.name,
+        "session_code": code,
+    }
 
 
 @router.post("/{code}/evaluate")
@@ -110,7 +129,6 @@ def evaluate(code: str, body: EvaluateBody):
             z=z,
         )
     except ValueError as e:
-        # max steps reached
         if str(e) == "max steps reached":
             raise HTTPException(status_code=409, detail="max steps reached")
         raise HTTPException(status_code=400, detail=str(e))
@@ -127,6 +145,7 @@ def evaluate(code: str, body: EvaluateBody):
         **result,
     }
 
+
 @router.get("/{code}/leaderboard")
 def leaderboard(code: str):
     try:
@@ -134,7 +153,11 @@ def leaderboard(code: str):
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
-    return {"session_code": code, "leaderboard": rows}
+    return {
+        "session_code": code,
+        "leaderboard": rows,
+    }
+
 
 @router.post("/{code}/end")
 def end_session(code: str, x_admin_token: str = Header(default="")):
@@ -146,7 +169,11 @@ def end_session(code: str, x_admin_token: str = Header(default="")):
         raise HTTPException(status_code=401, detail="invalid admin token")
 
     updated = set_session_status(code, "ended")
-    return {"session_code": code, "status": updated.status}
+    return {
+        "session_code": code,
+        "status": updated.status,
+    }
+
 
 @router.get("/{code}/export")
 def export_session(code: str, x_admin_token: str = Header(default="")):
@@ -168,6 +195,7 @@ def export_session(code: str, x_admin_token: str = Header(default="")):
             {
                 "participant_id": p.id,
                 "name": p.name,
+                "is_bot": getattr(p, "is_bot", False),
                 "steps": len(p.clicks),
                 "found": p.found_step is not None,
                 "found_step": p.found_step,
@@ -188,12 +216,24 @@ def export_session(code: str, x_admin_token: str = Header(default="")):
             "tolerance": spec.tolerance,
             "bounds": spec.bounds,
         },
+        "reveal": {
+            "function_id": spec.id,
+            "title": spec.reveal_title or spec.name,
+            "description": spec.reveal_description,
+            "image": spec.reveal_image,
+        },
         "participants": participants,
         "leaderboard": compute_leaderboard(code),
     }
 
+
 @router.post("/{code}/bots/random_search")
-def bot_random_search(code: str, n: int = 20, seed: int | None = None, delay_ms: int = 0):
+def bot_random_search(
+    code: str,
+    n: int = 20,
+    seed: int | None = None,
+    delay_ms: int = 0,
+):
     s = get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
@@ -207,25 +247,22 @@ def bot_random_search(code: str, n: int = 20, seed: int | None = None, delay_ms:
     if seed is not None:
         random.seed(seed)
 
-    # Bot beitreten (erscheint als Teilnehmer im Leaderboard)
     bot_name = f"Bot-Random(n={n})"
     try:
-        bot = join_session(code=code, name=bot_name)
+        bot = join_session(code=code, name=bot_name, is_bot=True)
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
-    # Bounds aus FunctionSpec
     spec = get_spec(s.function_id)
     b = spec.bounds
 
-    # n zufällige Punkte evaluieren
     for _ in range(n):
         x = random.uniform(b["xmin"], b["xmax"])
         y = random.uniform(b["ymin"], b["ymax"])
         z = evaluate_function(s.function_id, x, y)
         add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+
         if delay_ms > 0:
-            import time
             time.sleep(delay_ms / 1000.0)
 
     return {
@@ -234,6 +271,7 @@ def bot_random_search(code: str, n: int = 20, seed: int | None = None, delay_ms:
         "bot_name": bot.name,
         "n": n,
     }
+
 
 @router.post("/{code}/bots/hill_climb")
 def bot_hill_climb(
@@ -259,21 +297,19 @@ def bot_hill_climb(
         random.seed(seed)
 
     bot_name = f"Bot-HillClimb(n={n},h={step_size})"
-    bot = join_session(code=code, name=bot_name)
+    bot = join_session(code=code, name=bot_name, is_bot=True)
 
     spec = get_spec(s.function_id)
     b = spec.bounds
 
-    # Startpunkt zufällig
     x = random.uniform(b["xmin"], b["xmax"])
     y = random.uniform(b["ymin"], b["ymax"])
     z = evaluate_function(s.function_id, x, y)
     add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+
     if delay_ms > 0:
-        import time
         time.sleep(delay_ms / 1000.0)
 
-    # Nachbarn (4er Kreuz)
     def neighbors(cx: float, cy: float):
         return [
             (cx + step_size, cy),
@@ -300,7 +336,6 @@ def bot_hill_climb(
                 if nz > best_z:
                     best_x, best_y, best_z = nx, ny, nz
 
-        # Wenn kein Nachbar besser: kleiner Schritt (optional)
         if best_z == z:
             step_size = step_size * 0.5
             if step_size < 1e-6:
@@ -309,8 +344,8 @@ def bot_hill_climb(
             x, y, z = best_x, best_y, best_z
 
         add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+
         if delay_ms > 0:
-            import time
             time.sleep(delay_ms / 1000.0)
 
     return {
@@ -320,6 +355,7 @@ def bot_hill_climb(
         "n": n,
         "final_step_size": step_size,
     }
+
 
 @router.get("/{code}/snapshot")
 def session_snapshot(code: str):

@@ -8,8 +8,8 @@ from blackbox_client import BlackBoxClient
 
 
 API_URL = "http://localhost:8000"
-SESSION_CODE = "4553EE"
-BOT_NAME = "Bot-Student-Template"
+SESSION_CODE = "2B4910"
+BOT_NAME = "Bot-Student-Template-NAME"
 
 
 class HistoryItem(TypedDict):
@@ -44,6 +44,10 @@ def main():
     info = client.get_public_info()
     print("Public session info:", info)
 
+    if info.status != "running":
+        print(f"Session ist nicht aktiv (status={info.status}). Bot wird nicht gestartet.")
+        return
+
     participant_id = client.join(BOT_NAME, is_bot=True)
     print("Joined as:", participant_id)
 
@@ -56,7 +60,7 @@ def main():
         try:
             result = client.evaluate(x, y)
         except Exception as e:
-            print("Stopped:", e)
+            print(f"Bot gestoppt in Schritt {step + 1}: {e}")
             break
 
         z = float(result["z"])

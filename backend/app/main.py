@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.db.session import Base, engine
 from app.db import models
@@ -8,6 +9,7 @@ from app.api.sessions import router as sessions_router
 
 app = FastAPI(title="2D Optimization Framework")
 
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 Base.metadata.create_all(bind=engine)
 app.add_middleware(
     CORSMiddleware,

@@ -10,10 +10,15 @@ type Props = {
   onEndSession: () => void;
   isEndingSession: boolean;
 
-  onStartRandomBot: (n: number, seed?: number) => void;
+  onStartRandomBot: (n: number, seed?: number, delayMs?: number) => void;
   isStartingBot: boolean;
 
-  onStartHillClimbBot: (n: number, stepSize: number, seed?: number) => void;
+  onStartHillClimbBot: (
+    n: number,
+    stepSize: number,
+    seed?: number,
+    delayMs?: number,
+  ) => void;
   isStartingHillClimbBot: boolean;
 };
 
@@ -34,6 +39,7 @@ export default function TeacherActiveSessionPanel({
   const [botStepSize, setBotStepSize] = React.useState(0.5);
   const [beamerMode, setBeamerMode] = React.useState(false);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
+  const [botDelayMs, setBotDelayMs] = React.useState(500);
   const hasSession = Boolean(createdCode);
   const maskedAdmin = adminToken ? adminToken.slice(0, 6) + "…" : "-";
 
@@ -159,10 +165,26 @@ export default function TeacherActiveSessionPanel({
                   style={{ width: "100%" }}
                 />
               </label>
+              <label style={{ fontSize: 12 }}>
+                delay_ms
+                <input
+                  type="number"
+                  value={botDelayMs}
+                  min={0}
+                  max={5000}
+                  step={100}
+                  onChange={(e) => setBotDelayMs(Number(e.target.value))}
+                  style={{ width: "100%" }}
+                />
+              </label>
 
               <button
                 onClick={() =>
-                  onStartRandomBot(botN, botSeed === "" ? undefined : botSeed)
+                  onStartRandomBot(
+                    botN,
+                    botSeed === "" ? undefined : botSeed,
+                    botDelayMs,
+                  )
                 }
                 disabled={!hasSession || isStartingBot}
               >
@@ -187,6 +209,7 @@ export default function TeacherActiveSessionPanel({
                     botN,
                     botStepSize,
                     botSeed === "" ? undefined : botSeed,
+                    botDelayMs,
                   )
                 }
                 disabled={!hasSession || isStartingHillClimbBot}

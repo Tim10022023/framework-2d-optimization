@@ -8,6 +8,7 @@ type Props = {
   bounds: Bounds;
   snapshot: SessionSnapshot | null;
   selectedPid: string;
+  revealFunctionId?: string | null;
   onSelectPid: (pid: string) => void;
 };
 
@@ -17,10 +18,12 @@ export default function TeacherInspectPanel({
   bounds,
   snapshot,
   selectedPid,
+  revealFunctionId,
   onSelectPid,
 }: Props) {
   const participants = snapshot?.participants ?? [];
   const [visibleStep, setVisibleStep] = useState<number>(0);
+  const [showHeatmap, setShowHeatmap] = useState(false);
 
   useEffect(() => {
     if (participants.length === 0) return;
@@ -149,6 +152,18 @@ export default function TeacherInspectPanel({
                   Alles
                 </button>
               </div>
+              {sessionStatus === "ended" && revealFunctionId && (
+                <label
+                  style={{ fontSize: 12, display: "block", marginBottom: 10 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={showHeatmap}
+                    onChange={(e) => setShowHeatmap(e.target.checked)}
+                  />{" "}
+                  Funktions-Heatmap anzeigen
+                </label>
+              )}
             </>
           )}
 
@@ -158,6 +173,8 @@ export default function TeacherInspectPanel({
             sessionStatus={sessionStatus}
             bounds={bounds}
             points={points}
+            showHeatmap={sessionStatus === "ended" && showHeatmap}
+            functionIdForHeatmap={revealFunctionId}
             onEvaluate={async () => {}}
             disableClick={true}
             hideDetails={true}

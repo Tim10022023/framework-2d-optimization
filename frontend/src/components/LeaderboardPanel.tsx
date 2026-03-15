@@ -8,6 +8,7 @@ type Props = {
 type Row = {
   participant_id: string;
   name: string;
+  is_bot?: boolean;
   steps: number;
   best_z: number | null;
   found_step: number | null;
@@ -40,7 +41,7 @@ export default function LeaderboardPanel({
     <div style={{ border: "1px solid #eee", padding: 12 }}>
       <h3 style={{ marginTop: 0 }}>Live-Leaderboard</h3>
       <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
-        Rangliste der aktuellen Session.
+        Beste aktuelle Werte der laufenden Session.
       </div>
 
       {rows.length === 0 ? (
@@ -48,9 +49,31 @@ export default function LeaderboardPanel({
       ) : (
         <ul style={{ listStyle: "none", paddingLeft: 0, margin: 0 }}>
           {rows.map((r, idx) => (
-            <li key={r.participant_id} style={{ marginBottom: 10 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                <div style={{ width: 18, textAlign: "right", opacity: 0.8 }}>
+            <li
+              key={r.participant_id}
+              style={{
+                marginBottom: 12,
+                padding: "8px 10px",
+                border: "1px solid #333",
+                borderRadius: 8,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  marginBottom: 4,
+                }}
+              >
+                <div
+                  style={{
+                    width: 22,
+                    textAlign: "right",
+                    opacity: 0.8,
+                    fontWeight: 700,
+                  }}
+                >
                   {idx + 1}.
                 </div>
 
@@ -62,17 +85,34 @@ export default function LeaderboardPanel({
                     padding: 0,
                     cursor: onSelectParticipant ? "pointer" : "default",
                     textDecoration: onSelectParticipant ? "underline" : "none",
-                    fontWeight: 700,
+                    fontWeight: 800,
+                    fontSize: 15,
                   }}
                   title={r.participant_id}
                 >
                   {r.name}
+                  {r.is_bot ? " [Bot]" : ""}
                 </button>
               </div>
 
-              <div style={{ marginLeft: 26, fontSize: 12, opacity: 0.9 }}>
-                steps: <b>{r.steps}</b> • best_z: <b>{r.best_z ?? "-"}</b> •
-                found_step: <b>{r.found_step ?? "-"}</b>
+              <div
+                style={{
+                  marginLeft: 30,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  fontSize: 12,
+                }}
+              >
+                <span>
+                  Klicks: <b>{r.steps}</b>
+                </span>
+                <span>
+                  best_z: <b>{r.best_z ?? "-"}</b>
+                </span>
+                <span>
+                  found_step: <b>{r.found_step ?? "—"}</b>
+                </span>
               </div>
             </li>
           ))}

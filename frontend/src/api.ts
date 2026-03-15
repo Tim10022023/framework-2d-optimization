@@ -106,10 +106,16 @@ export async function getSessionInfo(code: string): Promise<SessionInfo> {
   return res.json();
 }
 
-export async function startRandomBot(code: string, n: number, seed?: number) {
+export async function startRandomBot(
+  code: string,
+  n: number,
+  seed?: number,
+  delayMs?: number,
+) {
   const params = new URLSearchParams();
   params.set("n", String(n));
-  if (seed !== undefined && seed !== null) params.set("seed", String(seed));
+  if (seed !== undefined) params.set("seed", String(seed));
+  if (delayMs !== undefined) params.set("delay_ms", String(delayMs));
 
   const res = await fetch(
     `${API_URL}/sessions/${code}/bots/random_search?${params.toString()}`,
@@ -127,11 +133,13 @@ export async function startHillClimbBot(
   n: number,
   stepSize: number,
   seed?: number,
+  delayMs?: number,
 ) {
   const params = new URLSearchParams();
   params.set("n", String(n));
   params.set("step_size", String(stepSize));
-  if (seed !== undefined && seed !== null) params.set("seed", String(seed));
+  if (seed !== undefined) params.set("seed", String(seed));
+  if (delayMs !== undefined) params.set("delay_ms", String(delayMs));
 
   const res = await fetch(
     `${API_URL}/sessions/${code}/bots/hill_climb?${params.toString()}`,
