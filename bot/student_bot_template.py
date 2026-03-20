@@ -7,8 +7,8 @@ from typing import TypedDict
 from blackbox_client import BlackBoxClient
 
 
-API_URL = "http://localhost:8000"
-SESSION_CODE = "9A6747"
+API_URL = "http://10.50.15.53:8001"
+SESSION_CODE = "BDD865"
 BOT_NAME = "Bot-Student-Template-NAME"
 
 

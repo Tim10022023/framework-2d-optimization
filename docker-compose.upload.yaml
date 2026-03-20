@@ -3,7 +3,7 @@ services:
     image: opt2d-backend:latest
     container_name: opt2d-backend
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       DATABASE_URL: sqlite:///./data/app.db
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
