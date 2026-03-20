@@ -11,7 +11,8 @@ ENV VITE_PUBLIC_APP_URL=$VITE_PUBLIC_APP_URL
 ENV VITE_TEACHER_PIN=$VITE_TEACHER_PIN
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci --include=dev
+
 COPY . .
 RUN npm run build
 
