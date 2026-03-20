@@ -8,7 +8,7 @@ from blackbox_client import BlackBoxClient
 
 
 API_URL = "http://localhost:8000"
-SESSION_CODE = "A4AEA3"
+SESSION_CODE = "9A6747"
 BOT_NAME = "Bot-Student-Template-NAME"
 
 

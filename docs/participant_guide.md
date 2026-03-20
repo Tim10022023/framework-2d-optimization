@@ -2,6 +2,16 @@
 
 Diese Kurzanleitung richtet sich an Teilnehmende einer laufenden Session im Framework **2D Optimization**.
 
+## Was bereitgestellt werden muss
+
+Teilnehmende benötigen:
+
+- die Frontend-URL
+- den **Session-Code**
+
+Optional:
+- QR-Code / Beamer Mode des Dozenten
+
 ## Ziel
 
 Als Teilnehmer optimierst du eine **unbekannte 2D-Funktion**.  
@@ -21,42 +31,21 @@ Nach erfolgreichem Join bist du Teil der laufenden Session.
 Du kannst auf der 2D-Fläche Punkte setzen.  
 Für jeden Punkt wird die Funktion ausgewertet und ein Wert zurückgegeben.
 
-Dabei siehst du:
+Dabei siehst du typischerweise:
+
 - deinen aktuellen Punktverlauf
 - deine bisherigen Bewertungen
 - Statistiken zu deinen Schritten
-- optional das Leaderboard
 - optional Bot-Pfade, falls diese im UI eingeblendet sind
 
 Wichtig:
+
 - die eigentliche Zielfunktion bleibt während der Session verborgen
-- der Fokus liegt auf dem Blackbox-Optimieren
 - je nach Session ist die Anzahl der erlaubten Schritte begrenzt
-
-## Ziel der Optimierung
-
-Je nach Funktion geht es um:
-- **Minimierung** oder
-- **Maximierung**
-
-Die genaue Funktionsform wird während der Session nicht angezeigt.
-
-## Sichtbarkeit im UI
-
-Teilnehmer sehen bewusst **keine internen Funktionsdetails**.  
-Bots können im UI markiert sein. Je nach Einstellung können Bot-Pfade zusätzlich sichtbar sein.
+- Ziel ist je nach Session **Minimierung** oder **Maximierung**
 
 ## Nach Session-Ende
 
-Sobald der Dozent die Session beendet, kann der Reveal angezeigt werden.  
-Dann werden je nach Ansicht zusätzliche Informationen sichtbar, zum Beispiel:
-- Funktionsbild / Plot
-- Exportdaten
-- Analyse des Verlaufs
+Sobald der Dozent die Session beendet, sind keine weiteren normalen Evaluierungen mehr möglich.
 
-## Tipps
-
-- nicht nur zufällig klicken, sondern systematisch vorgehen
-- gute Punkte und deren Umgebung vergleichen
-- den Verlauf deiner Schritte beobachten
-- Ausreißer und lokale Verbesserungen bewusst nutzen
+Je nach Dozentenansicht kann anschließend ein Reveal angezeigt werden.

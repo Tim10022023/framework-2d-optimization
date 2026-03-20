@@ -2,23 +2,28 @@
 
 Diese Kurzanleitung richtet sich an Dozierende bzw. die administrierende Rolle im Framework **2D Optimization**.
 
+## Was bereitgestellt werden muss
+
+Für den Dozentenbetrieb werden benötigt:
+
+- Zugriff auf die laufende Frontend-URL
+- der **Dozenten-PIN** zum Erstellen von Sessions
+
+Optional hilfreich:
+- Zugriff auf die Backend-URL / Swagger-Doku für technische Prüfung
+
 ## Ziel
 
-Als Dozent verwaltest du eine Session, beobachtest Teilnehmer und Bots und führst nach Session-Ende den Reveal durch.
+Als Dozent erstellst und steuerst du Sessions, beobachtest Teilnehmer und Bots und kannst Reveal/Analyse in der Dozentenansicht einblenden.
 
 ## Session starten
 
 1. Frontend öffnen
-2. in die Dozentenansicht wechseln
-3. Funktions-ID auswählen
-4. Session konfigurieren
-5. Session erstellen
-
-Typische Konfigurationspunkte:
-- Name / Bezeichnung
-- verwendete Funktion
-- maximale Schrittzahl
-- optionale Bot-Nutzung
+2. in die **Dozentenansicht** wechseln
+3. Funktion auswählen
+4. Ziel und maximale Klickzahl festlegen
+5. **Dozenten-PIN** eingeben
+6. **Session erstellen**
 
 Nach dem Start wird ein Session-Code erzeugt.
 
@@ -33,49 +38,43 @@ einer Session beitreten.
 ## Während der Session
 
 In der Dozentenansicht kannst du:
+
 - Leaderboard beobachten
 - Teilnehmer und Bots unterscheiden
 - Teilnehmerpfade inspizieren
 - Bot-Pfade inspizieren
 - Schritt-für-Schritt-Debugging per Slider verwenden
+- Reveal-Plots bei Bedarf einblenden
 
-Je nach UI-Stand stehen zusätzlich zur Verfügung:
+Zusätzlich stehen zur Verfügung:
+
 - QR / Beamer Mode
 - tab-lokale Rollen-/Sessionzustände
-- optionale Bot-Markierung
-- Heatmap-Overlay im Inspector als Bonus
+- Bot-Markierung im UI
 
-## Leaderboard und Verlauf
+## Reveal und Session-Ende
 
-Das Leaderboard aktualisiert sich während der laufenden Session.  
-Der Inspector erlaubt es, einzelne Teilnehmer oder Bots auszuwählen und deren Verlauf schrittweise nachzuvollziehen.
+Die Session-Steuerung ist getrennt:
 
-Damit lassen sich unter anderem analysieren:
-- welche Punkte ausprobiert wurden
-- wie sich der bestgefundene Wert entwickelt hat
-- wie sich Mensch und Bot unterscheiden
+- **Session beenden**: beendet die aktive Teilnehmerphase
+- **Reveal anzeigen / ausblenden**: blendet die Analyse-/Reveal-Daten in der Dozentenansicht ein oder aus
 
-## Session beenden
+Hinweis:
+- Nach Session-Ende können Teilnehmer nicht mehr normal evaluieren
+- interne Teacher-Bots können weiterhin gestartet werden
+- Reveal ist eine Dozentenansicht und kann separat ein- oder ausgeblendet werden
 
-Wenn die aktive Phase abgeschlossen ist:
+## Bots
 
-1. Session beenden
-2. Reveal laden bzw. anzeigen
-3. Export prüfen
+Interne Vergleichsbots im Dozenten-UI:
 
-Nach dem Session-Ende können Reveal und Export nach Refresh im Dozenten-UI erneut geladen werden.
+- Random Search
+- Hill Climb
 
-## Reveal
-
-Nach dem Ende der Session stehen zusätzliche Informationen zur Verfügung, zum Beispiel:
-- Funktionsbild / Plot
-- Exportdaten
-- detailliertere Analyse des Suchverlaufs
-
-Die Heatmap im Inspector ist dabei als Bonusfunktion zu verstehen.
+Diese sind Dozentenfunktionen und laufen über den administrativen Kontext.
 
 ## Hinweise
 
 - Teilnehmer sehen während der Session keine Funktionsdetails
-- Bots sind im UI markiert
+- der Dozenten-PIN sollte nur an die administrierende Person gegeben werden
 - das Tool ist vor allem für Demo-, Lehr- und kleinere bis mittlere Gruppenszenarien gedacht

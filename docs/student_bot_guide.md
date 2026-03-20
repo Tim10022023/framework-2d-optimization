@@ -2,19 +2,30 @@
 
 Diese Kurzanleitung erklärt, wie ein eigener lokaler Python-Bot gegen das Framework **2D Optimization** ausgeführt werden kann.
 
+## Was bereitgestellt werden muss
+
+Für Studierende sollten mindestens diese Dateien bereitgestellt werden:
+
+- `bot/student_bot_template.py`
+- `bot/blackbox_client.py`
+
+Zusätzlich nötig:
+
+- eine laufende Session
+- der **Session-Code**
+- die **API-URL** des Backends
+- lokal installiertes Python
+- Python-Paket `requests`
+
+Optional sinnvoll:
+- `bot/requirements.txt` mit `requests`
+
 ## Zweck
 
 Der Student-Bot arbeitet gegen die **öffentliche Blackbox-Schnittstelle** einer laufenden Session.  
 Er kennt nicht die interne Funktionsdefinition, sondern nutzt nur die erlaubten Session- und Evaluierungsinformationen.
 
-## Relevante Dateien
-
-- `bot/blackbox_client.py`
-- `bot/student_bot_template.py`
-
 ## Voraussetzungen
-
-Python ist lokal installiert.
 
 Benötigte Bibliothek:
 
@@ -25,10 +36,15 @@ pip install requests
 ## Session vorbereiten
 
 Voraussetzung:
+
 - es gibt bereits eine laufende Session
 - der Session-Status ist `running`
 
-Den Session-Code trägst du im Bot-Template ein.
+Im Bot-Template werden typischerweise eingetragen:
+
+- API-URL
+- Session-Code
+- Bot-/Teilnehmername
 
 ## Bot starten
 
@@ -38,45 +54,21 @@ python bot\student_bot_template.py
 
 ## Was der Bot macht
 
-Der Bot sendet Punkte an die laufende Session und erhält dafür die jeweiligen Funktionswerte zurück.  
-Die Logik, wie neue Punkte vorgeschlagen werden, implementierst du selbst.
+Der Bot joint normal als Teilnehmer/Bot und sendet Punkte an die laufende Session.  
+Für jeden Punkt erhält er den zugehörigen Funktionswert zurück.
+
+Die Suchstrategie implementierst du selbst.
 
 Typischer Einstieg:
+
 - Session-Code eintragen
+- API-URL prüfen
 - `propose_point(...)` anpassen
 - Bot starten
 - Verlauf im Frontend beobachten
 
-## API / Verbindung
+## Wichtige Hinweise
 
-Der Client nutzt die öffentliche Session-/Blackbox-Schnittstelle.
-
-Wichtig:
-- lokal ist die API typischerweise unter `http://localhost:8000` erreichbar
-- wenn Frontend/Backend anders gehostet sind, muss die API-URL entsprechend angepasst werden
-
-## Hinweise zur Implementierung
-
-Sinnvolle einfache Strategien:
-- Random Search
-- lokales Ausprobieren um gute Punkte herum
-- Hill-Climbing-artige Verfahren
-- Restart-Strategien
-
-Wichtig:
-- der Bot soll mit der Blackbox arbeiten, nicht mit internem Direktzugriff auf die Zielfunktion
-- das Template ist bewusst einfach gehalten und kann erweitert werden
-
-## Typische Fehlerquellen
-
-- falscher Session-Code
-- Session noch nicht gestartet oder schon beendet
-- API-URL nicht passend gesetzt
-- zu aggressive Request-Frequenz bei vielen parallelen Bots
-
-## Einordnung
-
-Der Student-Bot eignet sich gut für:
-- Vergleich von Suchstrategien
-- didaktische Experimente
-- kleine Bot-Wettbewerbe innerhalb einer Lehrveranstaltung
+- der Bot soll mit der **Blackbox-Schnittstelle** arbeiten, nicht mit internem Direktzugriff auf die Zielfunktion
+- nach Session-Ende sind normale Evaluierungen nicht mehr möglich
+- zu aggressive Request-Frequenz kann das System bei vielen parallelen Bots belasten
