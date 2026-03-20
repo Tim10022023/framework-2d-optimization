@@ -9,44 +9,41 @@ Für Studierende sollten mindestens diese Dateien bereitgestellt werden:
 - `bot/student_bot_template.py`
 - `bot/blackbox_client.py`
 
-Zusätzlich nötig:
+Zusätzlich werden benötigt:
 
-- eine laufende Session
-- der **Session-Code**
-- die **API-URL** des Backends
-- lokal installiertes Python
-- Python-Paket `requests`
+- die **Backend-API-URL**
+- ein **Session-Code**
+- lokal installiertes **Python**
+- das Paket **requests**
 
 Optional sinnvoll:
-- `bot/requirements.txt` mit `requests`
+- `bot/requirements.txt`
 
-## Zweck
-
-Der Student-Bot arbeitet gegen die **öffentliche Blackbox-Schnittstelle** einer laufenden Session.  
-Er kennt nicht die interne Funktionsdefinition, sondern nutzt nur die erlaubten Session- und Evaluierungsinformationen.
-
-## Voraussetzungen
-
-Benötigte Bibliothek:
+## Installation
 
 ```powershell
 pip install requests
 ```
 
-## Session vorbereiten
+## Zweck
+
+Der Student-Bot arbeitet gegen die **öffentliche Blackbox-Schnittstelle** einer laufenden Session.  
+Er kennt die interne Zielfunktion nicht, sondern nutzt nur Join und Evaluate.
+
+## Vorbereitung
 
 Voraussetzung:
 
 - es gibt bereits eine laufende Session
-- der Session-Status ist `running`
+- der Status ist `running`
 
-Im Bot-Template werden typischerweise eingetragen:
+Im Bot-Template trägst du typischerweise ein:
 
 - API-URL
 - Session-Code
 - Bot-/Teilnehmername
 
-## Bot starten
+## Start
 
 ```powershell
 python bot\student_bot_template.py
@@ -54,21 +51,17 @@ python bot\student_bot_template.py
 
 ## Was der Bot macht
 
-Der Bot joint normal als Teilnehmer/Bot und sendet Punkte an die laufende Session.  
-Für jeden Punkt erhält er den zugehörigen Funktionswert zurück.
+Der Bot joint der Session und sendet Punkte `(x, y)` an die öffentliche Evaluierungsschnittstelle.  
+Als Antwort erhält er die jeweiligen Funktionswerte zurück.
 
-Die Suchstrategie implementierst du selbst.
+Die Suchstrategie implementierst du selbst, z. B.:
 
-Typischer Einstieg:
-
-- Session-Code eintragen
-- API-URL prüfen
-- `propose_point(...)` anpassen
-- Bot starten
-- Verlauf im Frontend beobachten
+- Random Search
+- lokales Suchen um gute Punkte
+- einfache Hill-Climbing-Strategien
 
 ## Wichtige Hinweise
 
-- der Bot soll mit der **Blackbox-Schnittstelle** arbeiten, nicht mit internem Direktzugriff auf die Zielfunktion
+- der Bot soll nur die **Blackbox-Schnittstelle** nutzen
 - nach Session-Ende sind normale Evaluierungen nicht mehr möglich
 - zu aggressive Request-Frequenz kann das System bei vielen parallelen Bots belasten
