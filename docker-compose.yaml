@@ -20,7 +20,7 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
         VITE_PUBLIC_APP_URL: ${VITE_PUBLIC_APP_URL:-http://localhost:5173}
-        VITE_TEACHER_PIN: ${VITE_TEACHER_PIN:-3736283747}
+        VITE_TEACHER_PIN: ${VITE_TEACHER_PIN:-CHANGE_ME}
     container_name: opt2d-frontend
     ports:
       - "5173:80"
