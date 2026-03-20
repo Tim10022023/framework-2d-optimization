@@ -108,14 +108,14 @@ Frontend lokal:
 ```env
 VITE_API_URL=http://localhost:8000
 VITE_PUBLIC_APP_URL=http://localhost:5173
-VITE_TEACHER_PIN=3736283747
+VITE_TEACHER_PIN=CHANGE_ME
 ```
 
 `frontend/.env.production`
 ```env
 VITE_API_URL=http://localhost:8000
 VITE_PUBLIC_APP_URL=http://localhost:5173
-VITE_TEACHER_PIN=3736283747
+VITE_TEACHER_PIN=CHANGE_ME
 ```
 
 Hinweis: Für echtes Deployment sollte `VITE_API_URL` auf die produktive Backend-URL angepasst werden.
