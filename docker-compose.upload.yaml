@@ -1,0 +1,24 @@
+services:
+  backend:
+    image: opt2d-backend:latest
+    container_name: opt2d-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./data/app.db
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
+    volumes:
+      - opt2d_data:/app/backend/data
+    restart: unless-stopped
+
+  frontend:
+    image: opt2d-frontend:latest
+    container_name: opt2d-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  opt2d_data:
