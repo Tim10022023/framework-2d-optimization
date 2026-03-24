@@ -32,6 +32,11 @@ const LS_NAME = "opt2d_name";
 const LS_CREATED_CODE = "opt2d_created_code";
 const LS_ADMIN_TOKEN = "opt2d_admin_token";
 const LS_SESSION_CTX = "opt2d_session_ctx";
+const TEACHER_INFO_POLL_MS = 3000;
+const PARTICIPANT_INFO_POLL_MS = 5000;
+const SNAPSHOT_POLL_MS = 6000;
+const REVEAL_POLL_MS = 8000;
+const HIDDEN_TAB_POLL_MS = 15000;
 
 type SessionCtx = {
   code: string;
@@ -121,6 +126,10 @@ export default function App() {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isStartingBot, setIsStartingBot] = useState(false);
   const [isStartingHillClimbBot, setIsStartingHillClimbBot] = useState(false);
+
+  const [isTabVisible, setIsTabVisible] = useState(
+    () => typeof document === "undefined" || !document.hidden,
+  );
 
   const activeFunction = useMemo(
     () => functions.find((f) => f.id === selectedFunctionId) ?? null,
@@ -408,6 +417,16 @@ export default function App() {
   }, [activeView, createdCode, code, activeSessionCode]);
 
   useEffect(() => {
+    function handleVisibilityChange() {
+      setIsTabVisible(!document.hidden);
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
     async function sync() {
       if (!code.trim()) return;
 
@@ -431,22 +450,35 @@ export default function App() {
   useEffect(() => {
     if (!activeSessionCode.trim()) return;
 
-    const id = setInterval(async () => {
+    let cancelled = false;
+    let infoCounter = 0;
+    let snapshotCounter = 0;
+    let revealCounter = 0;
+
+    const baseInterval = isTabVisible
+      ? activeView === "teacher"
+        ? TEACHER_INFO_POLL_MS
+        : PARTICIPANT_INFO_POLL_MS
+      : HIDDEN_TAB_POLL_MS;
+
+    async function tick() {
+      if (cancelled) return;
+
       try {
         const c = activeSessionCode.trim();
+        infoCounter += baseInterval;
+        snapshotCounter += baseInterval;
+        revealCounter += baseInterval;
 
-        const lb = await getLeaderboard(c);
-        setLeaderboard(lb);
+        // Teilnehmeransicht braucht kein Leaderboard-Polling
+        if (activeView === "teacher") {
+          const lb = await getLeaderboard(c);
+          if (!cancelled) setLeaderboard(lb);
+        }
 
         const info = await getSessionInfo(c);
-        if (activeView === "teacher" && revealed && adminToken.trim()) {
-          try {
-            const data = await exportSession(c, adminToken.trim());
-            setExportData(data);
-          } catch {
-            // ignore
-          }
-        }
+        if (cancelled) return;
+
         setSessionMaxSteps(info.max_steps ?? 30);
         setParticipantsCount(info.participants ?? 0);
         setSessionStatus(info.status);
@@ -459,18 +491,49 @@ export default function App() {
           activeView === "teacher" ||
           (activeView === "participant" && showOnlyBots);
 
-        if (needSnapshot) {
+        if (needSnapshot && snapshotCounter >= SNAPSHOT_POLL_MS) {
+          snapshotCounter = 0;
           const snap = await getSessionSnapshot(c);
+          if (cancelled) return;
+
           if (activeView === "teacher") setTeacherSnapshot(snap);
           if (activeView === "participant") setSnapshot(snap);
+        }
+
+        if (
+          activeView === "teacher" &&
+          revealed &&
+          adminToken.trim() &&
+          revealCounter >= REVEAL_POLL_MS
+        ) {
+          revealCounter = 0;
+          try {
+            const data = await exportSession(c, adminToken.trim());
+            if (!cancelled) setExportData(data);
+          } catch {
+            // ignore
+          }
         }
       } catch {
         // ignore
       }
-    }, 1500);
+    }
 
-    return () => clearInterval(id);
-  }, [activeSessionCode, activeView, showOnlyBots]);
+    tick();
+    const id = window.setInterval(tick, baseInterval);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [
+    activeSessionCode,
+    activeView,
+    showOnlyBots,
+    revealed,
+    adminToken,
+    isTabVisible,
+  ]);
 
   useEffect(() => {
     async function restore() {
