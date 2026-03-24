@@ -221,3 +221,6 @@ Thumbs.db
 # tmp/
 # Gemini Local Instructions
 .gemini_local/
+
+# Personal User Notes (not committed)
+PersonalNotes/
