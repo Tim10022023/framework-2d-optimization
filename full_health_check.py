@@ -7,7 +7,8 @@ import os
 # Configuration
 BACKEND_URL = "http://localhost:8000"
 FRONTEND_URL = "http://localhost:5173"
-DOCKER_COMPOSE_FILE = "repos/framework-2d-optimization/docker-compose.yaml"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DOCKER_COMPOSE_FILE = os.path.join(SCRIPT_DIR, "docker-compose.yaml")
 
 def run_shell(cmd, cwd=None):
     """Executes a shell command and returns True if successful."""
