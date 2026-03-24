@@ -28,7 +28,7 @@ class ParticipantModel(Base):
     found_z = Column(Float, nullable=True)
     is_bot = Column(Boolean, nullable=False, default=False)
 
-    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False)
+    session_id = Column(Integer, ForeignKey("sessions.id"), index=True, nullable=False)
     session = relationship("SessionModel", back_populates="participants")
 
     clicks = relationship("ClickModel", back_populates="participant", cascade="all, delete-orphan")
@@ -43,5 +43,5 @@ class ClickModel(Base):
     z = Column(Float, nullable=False)
     step = Column(Integer, nullable=False)
 
-    participant_id = Column(Integer, ForeignKey("participants.id"), nullable=False)
+    participant_id = Column(Integer, ForeignKey("participants.id"), index=True, nullable=False)
     participant = relationship("ParticipantModel", back_populates="clicks")

@@ -467,7 +467,7 @@ export default function App() {
       } catch {
         // ignore
       }
-    }, 1500);
+    }, 3000); // Increased from 1500 to 3000ms
 
     return () => clearInterval(id);
   }, [activeSessionCode, activeView, showOnlyBots]);

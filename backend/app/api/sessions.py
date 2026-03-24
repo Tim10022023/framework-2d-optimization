@@ -8,6 +8,8 @@ from app.core.store import (
     compute_leaderboard,
     create_session,
     get_session,
+    get_session_basic,
+    get_participants_count,
     join_session,
     set_session_status,
 )
@@ -70,7 +72,7 @@ def create_new_session(body: CreateSessionBody):
 
 @router.get("/{code}")
 def get_session_info(code: str):
-    s = get_session(code)
+    s = get_session_basic(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -78,7 +80,7 @@ def get_session_info(code: str):
         "session_code": s.code,
         "function_id": s.function_id,
         "goal": s.goal,
-        "participants": len(s.participants),
+        "participants": get_participants_count(code),
         "status": s.status,
         "max_steps": s.max_steps,
     }
@@ -86,13 +88,13 @@ def get_session_info(code: str):
 
 @router.get("/{code}/public")
 def get_public_session_info(code: str):
-    s = get_session(code)
+    s = get_session_basic(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
     return {
         "session_code": s.code,
-        "participants": len(s.participants),
+        "participants": get_participants_count(code),
         "status": s.status,
         "max_steps": s.max_steps,
     }
@@ -114,7 +116,7 @@ def join(code: str, body: JoinSessionBody):
 
 @router.post("/{code}/evaluate")
 def evaluate(code: str, body: EvaluateBody):
-    s = get_session(code)
+    s = get_session_basic(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
     if s.status == "ended":

@@ -80,6 +80,59 @@ def create_session(function_id: str, goal: str, max_steps: int) -> Session:
         db.close()
 
 
+import time
+
+# Simple cache: { (type, code): (timestamp, value) }
+_CACHE = {}
+CACHE_TTL = 1.0  # 1 second cache for polling endpoints
+
+def get_session_basic(code: str) -> Optional[Session]:
+    now = time.time()
+    cache_key = ("session_basic", code)
+    if cache_key in _CACHE:
+        ts, val = _CACHE[cache_key]
+        if now - ts < CACHE_TTL:
+            return val
+
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            return None
+
+        val = Session(
+            code=db_session.code,
+            function_id=db_session.function_id,
+            goal=db_session.goal,
+            admin_token=db_session.admin_token,
+            status=db_session.status,
+            participants={},  # Empty for basic info
+            max_steps=db_session.max_steps
+        )
+        _CACHE[cache_key] = (now, val)
+        return val
+    finally:
+        db.close()
+
+def get_participants_count(code: str) -> int:
+    now = time.time()
+    cache_key = ("participants_count", code)
+    if cache_key in _CACHE:
+        ts, val = _CACHE[cache_key]
+        if now - ts < CACHE_TTL:
+            return val
+
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            return 0
+        val = len(db_session.participants)
+        _CACHE[cache_key] = (now, val)
+        return val
+    finally:
+        db.close()
+
 def get_session(code: str) -> Optional[Session]:
     db = SessionLocal()
     try:
@@ -144,6 +197,8 @@ def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
     finally:
         db.close()
 
+from sqlalchemy import func
+
 def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> dict:
     db = SessionLocal()
     try:
@@ -162,10 +217,11 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
         if not db_participant:
             raise KeyError("participant not found")
 
-        current_clicks = sorted(db_participant.clicks, key=lambda c: c.step)
-        if len(current_clicks) >= db_session.max_steps:
+        # Efficiently count steps
+        step_count = db.query(func.count(ClickModel.id)).filter(ClickModel.participant_id == db_participant.id).scalar()
+        if step_count >= db_session.max_steps:
             raise ValueError("max steps reached")
-        step = len(current_clicks) + 1
+        step = step_count + 1
 
         db_click = ClickModel(
             x=x,
@@ -178,8 +234,11 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
         db.commit()
         db.refresh(db_click)
 
-        all_zs = [c.z for c in current_clicks] + [z]
-        best_z = min(all_zs) if db_session.goal == "min" else max(all_zs)
+        # Efficiently find best Z
+        best_z_query = db.query(
+            func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
+        ).filter(ClickModel.participant_id == db_participant.id)
+        best_z = best_z_query.scalar()
 
         spec = get_spec(db_session.function_id)
         found_now = False
@@ -211,57 +270,69 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
 
 
 def compute_leaderboard(code: str) -> list[dict]:
-    s = get_session(code)
-    if not s:
-        raise KeyError("session not found")
+    db = SessionLocal()
+    try:
+        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+        if not db_session:
+            raise KeyError("session not found")
 
-    rows: list[dict] = []
-    for p in s.participants.values():
-        if not p.clicks:
-            best_z = None
+        # Query all participants for this session
+        participants = db.query(ParticipantModel).filter(ParticipantModel.session_id == db_session.id).all()
+        
+        rows: list[dict] = []
+        for p in participants:
+            # Query best Z and count steps for each participant
+            res = db.query(
+                func.count(ClickModel.id),
+                func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
+            ).filter(ClickModel.participant_id == p.id).first()
+            
+            steps = res[0] or 0
+            best_z = res[1]
+
+            rows.append({
+                "participant_id": p.participant_code,
+                "name": p.name,
+                "is_bot": getattr(p, "is_bot", False),
+                "steps": steps,
+                "best_z": best_z,
+                "found": p.found_step is not None,
+                "found_step": p.found_step,
+            })
+
+        # Sortierlogik:
+        # 1) Found zuerst (found=True vor found=False)
+        # 2) Wenigste found_step (wer schneller "gefunden" hat)
+        # 3) Danach best_z (kleiner ist besser bei min, größer ist besser bei max)
+        # 4) Danach steps
+        if db_session.goal == "min":
+            rows.sort(
+                key=lambda r: (
+                    not r["found"],  # found=True zuerst
+                    r["found_step"] if r["found_step"] is not None else 10**9,
+                    r["best_z"] if r["best_z"] is not None else float("inf"),
+                    r["steps"],
+                )
+            )
         else:
-            zs = [c.z for c in p.clicks]
-            best_z = min(zs) if s.goal == "min" else max(zs)
-
-        rows.append(
-    {
-        "participant_id": p.id,
-        "name": p.name,
-        "is_bot": getattr(p, "is_bot", False),
-        "steps": len(p.clicks),
-        "best_z": best_z,
-        "found": p.found_step is not None,
-        "found_step": p.found_step,
-    }
-)
-
-    # Sortierlogik:
-    # 1) Found zuerst (found=True vor found=False)
-    # 2) Wenigste found_step (wer schneller "gefunden" hat)
-    # 3) Danach best_z (kleiner ist besser bei min, größer ist besser bei max)
-    # 4) Danach steps
-    if s.goal == "min":
-        rows.sort(
-            key=lambda r: (
-                not r["found"],  # found=True zuerst
-                r["found_step"] if r["found_step"] is not None else 10**9,
-                r["best_z"] if r["best_z"] is not None else float("inf"),
-                r["steps"],
+            rows.sort(
+                key=lambda r: (
+                    not r["found"],
+                    r["found_step"] if r["found_step"] is not None else 10**9,
+                    -(r["best_z"] if r["best_z"] is not None else float("-inf")),
+                    r["steps"],
+                )
             )
-        )
-    else:
-        rows.sort(
-            key=lambda r: (
-                not r["found"],
-                r["found_step"] if r["found_step"] is not None else 10**9,
-                -(r["best_z"] if r["best_z"] is not None else float("-inf")),
-                r["steps"],
-            )
-        )
 
-    return rows
+        return rows
+    finally:
+        db.close()
 
 def set_session_status(code: str, status: str) -> Session:
+    # Invalidate cache
+    _CACHE.pop(("session_basic", code), None)
+    _CACHE.pop(("participants_count", code), None)
+
     db = SessionLocal()
     try:
         db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
