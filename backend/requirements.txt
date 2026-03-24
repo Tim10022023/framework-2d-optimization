@@ -3,3 +3,6 @@ uvicorn[standard]
 sqlalchemy
 pydantic
 requests
+pytest
+httpx
+pytest-asyncio

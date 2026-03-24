@@ -219,3 +219,5 @@ Thumbs.db
 # exports/
 # screenshots/
 # tmp/
+# Gemini Local Instructions
+.gemini_local/
