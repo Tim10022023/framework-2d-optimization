@@ -57,19 +57,55 @@ async def test_join_and_evaluate(client):
     participant_id = join_res.json()["participant_id"]
 
     # 3. Evaluate point
+    # sphere_shifted: z = (x - 3.7)^2 + (y + 2.1)^2
+    # For (1,1): z = (-2.7)^2 + (3.1)^2 = 7.29 + 9.61 = 16.9
     eval_body = {
         "participant_id": participant_id,
-        "x": 3.7,
-        "y": -2.1
+        "x": 1.0,
+        "y": 1.0
     }
     eval_res = await client.post(f"/sessions/{session_code}/evaluate", json=eval_body)
     assert eval_res.status_code == 200
     eval_data = eval_res.json()
-    assert eval_data["x"] == 3.7
-    assert eval_data["y"] == -2.1
-    assert eval_data["z"] == 0.0  # Sphere global minimum
-    assert eval_data["best_z"] == 0.0
+    assert eval_data["x"] == 1.0
+    assert eval_data["y"] == 1.0
+    assert eval_data["z"] == pytest.approx(16.9)
+    assert eval_data["best_z"] == pytest.approx(16.9)
     assert eval_data["step"] == 1
+
+    # 4. Evaluate Second Point (better Z)
+    # For (3.7, -2.1): z = 0
+    eval_body_2 = {
+        "participant_id": participant_id,
+        "x": 3.7,
+        "y": -2.1
+    }
+    eval_res_2 = await client.post(f"/sessions/{session_code}/evaluate", json=eval_body_2)
+    assert eval_res_2.status_code == 200
+    assert eval_res_2.json()["best_z"] == pytest.approx(0.0)
+    assert eval_res_2.json()["step"] == 2
+
+@pytest.mark.asyncio
+async def test_max_steps_limit(client):
+    # 1. Create session with max_steps=2
+    create_body = {"function_id": "sphere_shifted", "goal": "min", "max_steps": 2}
+    create_res = await client.post("/sessions", json=create_body)
+    session_code = create_res.json()["session_code"]
+
+    # 2. Join
+    join_res = await client.post(f"/sessions/{session_code}/join", json={"name": "TestLimit"})
+    p_id = join_res.json()["participant_id"]
+
+    # 3. Evaluate twice (OK)
+    res1 = await client.post(f"/sessions/{session_code}/evaluate", json={"participant_id": p_id, "x": 0, "y": 0})
+    assert res1.status_code == 200
+    res2 = await client.post(f"/sessions/{session_code}/evaluate", json={"participant_id": p_id, "x": 0, "y": 0})
+    assert res2.status_code == 200
+
+    # 4. Third click should fail (409 Conflict)
+    res3 = await client.post(f"/sessions/{session_code}/evaluate", json={"participant_id": p_id, "x": 0, "y": 0})
+    assert res3.status_code == 409
+    assert res3.json()["detail"] == "max steps reached"
 
 @pytest.mark.asyncio
 async def test_leaderboard(client):
