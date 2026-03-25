@@ -231,6 +231,10 @@ Thumbs.db
 *.bak
 *.tmp
 
+# Docker exports (tar files from docker save)
+*.tar
+opt2d-*.tar
+
 # Local exports / test artifacts
 # exports/
 # screenshots/
@@ -239,6 +243,7 @@ Thumbs.db
 # AI assistant local instructions
 .gemini_local/
 .copilot_local/
+.github/copilot-instructions.md
 
 # Personal notes (not committed)
 PersonalNotes/
