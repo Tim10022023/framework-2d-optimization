@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { LeaderboardResponse } from "./types";
 import {
   createSession,
   endSession,
@@ -111,7 +112,7 @@ export default function App() {
   const [draftMaxSteps, setDraftMaxSteps] = useState<number>(30);
 
   const [points, setPoints] = useState<Point[]>([]);
-  const [leaderboard, setLeaderboard] = useState<any>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [exportData, setExportData] = useState<ExportData | null>(null);
   const [revealed, setRevealed] = useState(false);
 
@@ -239,8 +240,9 @@ export default function App() {
       setCollapseSignal((v) => v + 1);
       setActiveView("teacher");
       setSessionStatus("running");
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     } finally {
       setIsCreatingSession(false);
     }
@@ -258,8 +260,9 @@ export default function App() {
       const data = await exportSession(code.trim(), adminToken.trim());
       setExportData(data);
       setRevealed(true);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     }
   }
 
@@ -272,8 +275,9 @@ export default function App() {
       setSessionStatus("ended");
       setRevealed(false);
       setExportData(null);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     } finally {
       setIsEndingSession(false);
     }
@@ -295,8 +299,9 @@ export default function App() {
       setRevealed(false);
       setActiveSessionCode(code.trim());
       setActiveView("participant");
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     } finally {
       setIsJoining(false);
     }
@@ -309,8 +314,9 @@ export default function App() {
     try {
       const r = await evaluatePoint(code.trim(), participantId, x, y);
       setPoints((prev) => [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }]);
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
+    } catch (e: unknown) {
+      const error = e instanceof Error ? e : new Error(String(e));
+      const msg = error?.message ?? String(e);
       if (msg.includes("max steps reached")) {
         setError("Klick-Limit erreicht – keine weiteren Klicks möglich.");
       } else {
@@ -327,8 +333,9 @@ export default function App() {
       await startRandomBot(code.trim(), adminToken.trim(), n, seed, delayMs);
       const lb = await getLeaderboard(code.trim());
       setLeaderboard(lb);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     } finally {
       setIsStartingBot(false);
     }
@@ -354,8 +361,9 @@ export default function App() {
       );
       const lb = await getLeaderboard(code.trim());
       setLeaderboard(lb);
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
     } finally {
       setIsStartingHillClimbBot(false);
     }
@@ -372,8 +380,9 @@ export default function App() {
           setDraftFunctionId(first.id);
           setDraftGoal(first.allowed_goals[0] as "min" | "max");
         }
-      } catch (e: any) {
-        setError(e?.message ?? String(e));
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        setError(message);
       }
     }
 
@@ -451,7 +460,6 @@ export default function App() {
     if (!activeSessionCode.trim()) return;
 
     let cancelled = false;
-    let infoCounter = 0;
     let snapshotCounter = 0;
     let revealCounter = 0;
 
@@ -466,7 +474,6 @@ export default function App() {
 
       try {
         const c = activeSessionCode.trim();
-        infoCounter += baseInterval;
         snapshotCounter += baseInterval;
         revealCounter += baseInterval;
 

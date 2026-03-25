@@ -14,8 +14,21 @@ COPY package*.json ./
 RUN npm ci --include=dev
 
 COPY . .
+
+# Run linting and type checks before build
+RUN npm run lint || echo "Linting warnings detected"
+RUN npx tsc --noEmit || echo "Type check warnings detected"
+
+# Build the app
 RUN npm run build
 
 FROM nginx:alpine
+
+# Copy built app to nginx
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# Add health check for nginx
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:80 || exit 1
+
 EXPOSE 80

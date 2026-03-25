@@ -43,7 +43,10 @@ export default function TeacherCreatePanel({
   const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
-    if (collapseSignal !== undefined) setIsOpen(false);
+    if (collapseSignal !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsOpen(false);
+    }
   }, [collapseSignal]);
 
   return (

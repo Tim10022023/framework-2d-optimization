@@ -182,14 +182,25 @@ pnpm-debug.log*
 .vite/
 
 # =========================
-# Local databases / runtime state
+# Sensitive / Local Configuration
 # =========================
 
+# Environment files with potential secrets
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Database files (local development)
 *.db
 *.db-journal
 *.sqlite
 *.sqlite3
 backend/app.db
+
+# Logs
+*.log
+logs/
 
 # =========================
 # OS / Editor
@@ -212,15 +223,23 @@ Thumbs.db
 .git/
 
 # =========================
-# Project-specific optional ignores
+# Project-specific ignores
 # =========================
 
-# lokale Exporte / Testartefakte bei Bedarf
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# Local exports / test artifacts
 # exports/
 # screenshots/
 # tmp/
-# Gemini Local Instructions
-.gemini_local/
 
-# Personal User Notes (not committed)
+# AI assistant local instructions
+.gemini_local/
+.copilot_local/
+
+# Personal notes (not committed)
 PersonalNotes/
+notes.md
