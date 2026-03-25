@@ -59,6 +59,7 @@ export default function FunctionContourPlot({
     return traces;
   }, [def, grid, points]);
 
+  const hasPoints = points.length > 0;
   const layout = useMemo<Partial<Layout>>(() => {
     if (!def) return {};
 
@@ -75,10 +76,10 @@ export default function FunctionContourPlot({
         scaleanchor: "x",
         scaleratio: 1,
       },
-      showlegend: points.length > 0,
+      showlegend: hasPoints,
       uirevision: `contour-${functionId}`,
     };
-  }, [def, functionId, height, points.length]);
+  }, [def, functionId, height, hasPoints]);
 
   if (!def || !grid) return null;
 

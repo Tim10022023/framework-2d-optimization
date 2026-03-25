@@ -76,7 +76,7 @@ export default function TeacherInspectPanel({
       z: c.z,
       step: idx + 1,
     }));
-  }, [selected, visibleStep]);
+  }, [selected?.participant_id, selected?.clicks.length, visibleStep]);
 
   const bestZ = useMemo(() => {
     if (points.length === 0) return null;
@@ -223,17 +223,13 @@ export default function TeacherInspectPanel({
               >
                 <FunctionContourPlot
                   functionId={revealFunctionId}
-                  points={points.map((p) => ({ x: p.x, y: p.y }))}
+                  points={points}
                   height={300}
                 />
 
                 <FunctionSurfacePlot
                   functionId={revealFunctionId}
-                  points={points.map((p) => ({
-                    x: p.x,
-                    y: p.y,
-                    z: p.z,
-                  }))}
+                  points={points}
                   height={320}
                 />
               </div>

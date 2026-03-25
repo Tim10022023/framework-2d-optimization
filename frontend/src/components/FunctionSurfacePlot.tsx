@@ -59,6 +59,7 @@ export default function FunctionSurfacePlot({
     return traces;
   }, [def, grid, points]);
 
+  const hasPoints = points.length > 0;
   const layout = useMemo<Partial<Layout>>(() => {
     if (!def) return {};
 
@@ -77,10 +78,10 @@ export default function FunctionSurfacePlot({
           eye: { x: 1.5, y: 1.4, z: 0.9 },
         },
       },
-      showlegend: points.length > 0,
+      showlegend: hasPoints,
       uirevision: `surface-${functionId}`,
     };
-  }, [def, functionId, height, points.length]);
+  }, [def, functionId, height, hasPoints]);
 
   if (!def || !grid) return null;
 
