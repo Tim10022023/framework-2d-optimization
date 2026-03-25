@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useMemo, useState } from "react";
 import PlotCanvas from "./PlotCanvas";
 import FunctionContourPlot from "./FunctionContourPlot";
@@ -25,7 +26,11 @@ export default function TeacherInspectPanel({
   revealed,
   onSelectPid,
 }: Props) {
-  const participants = snapshot?.participants ?? [];
+  // useMemo to stabilize participants array to prevent useEffect dependency issues
+  const participants = useMemo(
+    () => snapshot?.participants ?? [],
+    [snapshot?.participants]
+  );
   const [visibleStep, setVisibleStep] = useState<number>(0);
   const [showRevealPlots, setShowRevealPlots] = useState(false);
 
@@ -58,7 +63,7 @@ export default function TeacherInspectPanel({
   useEffect(() => {
     if (!selected) return;
     setVisibleStep(selected.clicks.length);
-  }, [selectedPid]);
+  }, [selected, selectedPid]);
 
   useEffect(() => {
     if (!revealed) {
@@ -76,7 +81,7 @@ export default function TeacherInspectPanel({
       z: c.z,
       step: idx + 1,
     }));
-  }, [selected?.participant_id, selected?.clicks.length, visibleStep]);
+  }, [selected, visibleStep]);
 
   const bestZ = useMemo(() => {
     if (points.length === 0) return null;
