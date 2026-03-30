@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import time
+import asyncio
+import json
+import random
+from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional
 from uuid import uuid4
 
-from app.core.functions import get_spec
+from sqlalchemy import select, func, insert
+from sqlalchemy.orm import selectinload
 
-from app.db.session import SessionLocal
+from app.core.functions import get_spec, evaluate_function
+from app.db.session import AsyncSessionLocal
 from app.db.models import SessionModel, ParticipantModel, ClickModel
+from app.core.redis import get_redis
+from app.core.config import settings
 
 @dataclass
 class Click:
@@ -40,21 +48,15 @@ class Session:
 
 
 
-# In-memory "DB"
-SESSIONS: Dict[str, Session] = {}
-
-
 def new_code() -> str:
-    # kurz & gut genug fürs MVP
     return uuid4().hex[:6].upper()
 
 
-def create_session(function_id: str, goal: str, max_steps: int) -> Session:
+async def create_session(function_id: str, goal: str, max_steps: int) -> Session:
     code = new_code()
     admin_token = uuid4().hex
 
-    db = SessionLocal()
-    try:
+    async with AsyncSessionLocal() as db:
         db_session = SessionModel(
             code=code,
             function_id=function_id,
@@ -64,8 +66,8 @@ def create_session(function_id: str, goal: str, max_steps: int) -> Session:
             max_steps=max_steps,
         )
         db.add(db_session)
-        db.commit()
-        db.refresh(db_session)
+        await db.commit()
+        await db.refresh(db_session)
 
         return Session(
             code=db_session.code,
@@ -76,27 +78,23 @@ def create_session(function_id: str, goal: str, max_steps: int) -> Session:
             participants={},
             max_steps=db_session.max_steps,
         )
-    finally:
-        db.close()
 
 
-import time
+async def get_session_basic(code: str) -> Optional[Session]:
+    redis = get_redis()
+    cache_key = f"session_basic:{code}"
+    cached = await redis.get(cache_key) if redis else None
+    if cached:
+        data = json.loads(cached)
+        # Participants are empty in basic view
+        data["participants"] = {}
+        return Session(**data)
 
-# Simple cache: { (type, code): (timestamp, value) }
-_CACHE = {}
-CACHE_TTL = 1.0  # 1 second cache for polling endpoints
-
-def get_session_basic(code: str) -> Optional[Session]:
-    now = time.time()
-    cache_key = ("session_basic", code)
-    if cache_key in _CACHE:
-        ts, val = _CACHE[cache_key]
-        if now - ts < CACHE_TTL:
-            return val
-
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+    async with AsyncSessionLocal() as db:
+        stmt = select(SessionModel).where(SessionModel.code == code)
+        result = await db.execute(stmt)
+        db_session = result.scalar_one_or_none()
+        
         if not db_session:
             return None
 
@@ -109,34 +107,45 @@ def get_session_basic(code: str) -> Optional[Session]:
             participants={},  # Empty for basic info
             max_steps=db_session.max_steps
         )
-        _CACHE[cache_key] = (now, val)
+        
+        # Cache for basic info doesn't need participants
+        cache_data = asdict(val)
+        if redis:
+            await redis.setex(cache_key, settings.CACHE_TTL, json.dumps(cache_data))
         return val
-    finally:
-        db.close()
 
-def get_participants_count(code: str) -> int:
-    now = time.time()
-    cache_key = ("participants_count", code)
-    if cache_key in _CACHE:
-        ts, val = _CACHE[cache_key]
-        if now - ts < CACHE_TTL:
-            return val
+async def get_participants_count(code: str) -> int:
+    redis = get_redis()
+    cache_key = f"participants_count:{code}"
+    cached = await redis.get(cache_key) if redis else None
+    if cached:
+        return int(cached)
 
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
-        if not db_session:
-            return 0
-        val = len(db_session.participants)
-        _CACHE[cache_key] = (now, val)
+    async with AsyncSessionLocal() as db:
+        # Join to count participants efficiently
+        stmt = (
+            select(func.count(ParticipantModel.id))
+            .join(SessionModel)
+            .where(SessionModel.code == code)
+        )
+        result = await db.execute(stmt)
+        val = result.scalar() or 0
+        if redis:
+            await redis.setex(cache_key, settings.CACHE_TTL, str(val))
         return val
-    finally:
-        db.close()
 
-def get_session(code: str) -> Optional[Session]:
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+async def get_session(code: str) -> Optional[Session]:
+    # Detailed session with all participants and clicks - not cached for now as it's large
+    async with AsyncSessionLocal() as db:
+        # Use selectinload to avoid lazy loading issues in async
+        stmt = (
+            select(SessionModel)
+            .options(selectinload(SessionModel.participants).selectinload(ParticipantModel.clicks))
+            .where(SessionModel.code == code)
+        )
+        result = await db.execute(stmt)
+        db_session = result.scalar_one_or_none()
+        
         if not db_session:
             return None
 
@@ -165,13 +174,19 @@ def get_session(code: str) -> Optional[Session]:
             participants=participants,
             max_steps=db_session.max_steps
         )
-    finally:
-        db.close()
 
-def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+async def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
+    # Invalidate participant count and snapshot cache
+    redis = get_redis()
+    if redis:
+        await redis.delete(f"participants_count:{code}")
+        await redis.delete(f"snapshot:{code}")
+
+    async with AsyncSessionLocal() as db:
+        stmt = select(SessionModel).where(SessionModel.code == code)
+        result = await db.execute(stmt)
+        db_session = result.scalar_one_or_none()
+        
         if not db_session:
             raise KeyError("session not found")
 
@@ -184,8 +199,8 @@ def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
             session_id=db_session.id,
         )
         db.add(db_participant)
-        db.commit()
-        db.refresh(db_participant)
+        await db.commit()
+        await db.refresh(db_participant)
 
         return Participant(
             id=db_participant.participant_code,
@@ -194,35 +209,36 @@ def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
             found_step=db_participant.found_step,
             found_z=db_participant.found_z,
         )
-    finally:
-        db.close()
 
-from sqlalchemy import func
-
-def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> dict:
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+async def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> dict:
+    async with AsyncSessionLocal() as db:
+        # 1. Get Session
+        session_stmt = select(SessionModel).where(SessionModel.code == code)
+        result = await db.execute(session_stmt)
+        db_session = result.scalar_one_or_none()
         if not db_session:
             raise KeyError("session not found")
 
-        db_participant = (
-            db.query(ParticipantModel)
-            .filter(
-                ParticipantModel.session_id == db_session.id,
-                ParticipantModel.participant_code == participant_id,
-            )
-            .first()
+        # 2. Get Participant
+        participant_stmt = select(ParticipantModel).where(
+            ParticipantModel.session_id == db_session.id,
+            ParticipantModel.participant_code == participant_id,
         )
+        result = await db.execute(participant_stmt)
+        db_participant = result.scalar_one_or_none()
         if not db_participant:
             raise KeyError("participant not found")
 
-        # Efficiently count steps
-        step_count = db.query(func.count(ClickModel.id)).filter(ClickModel.participant_id == db_participant.id).scalar()
+        # 3. Step Count
+        count_stmt = select(func.count(ClickModel.id)).where(ClickModel.participant_id == db_participant.id)
+        result = await db.execute(count_stmt)
+        step_count = result.scalar() or 0
+        
         if step_count >= db_session.max_steps:
             raise ValueError("max steps reached")
         step = step_count + 1
 
+        # 4. Add Click
         db_click = ClickModel(
             x=x,
             y=y,
@@ -231,14 +247,14 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
             participant_id=db_participant.id,
         )
         db.add(db_click)
-        db.commit()
-        db.refresh(db_click)
+        await db.commit()
+        await db.refresh(db_click)
 
-        # Efficiently find best Z
-        best_z_query = db.query(
-            func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
-        ).filter(ClickModel.participant_id == db_participant.id)
-        best_z = best_z_query.scalar()
+        # 5. Best Z
+        z_agg = func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
+        best_z_stmt = select(z_agg).where(ClickModel.participant_id == db_participant.id)
+        result = await db.execute(best_z_stmt)
+        best_z = result.scalar()
 
         spec = get_spec(db_session.function_id)
         found_now = False
@@ -255,8 +271,14 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
                 found_now = True
 
             if found_now:
-                db.commit()
-                db.refresh(db_participant)
+                await db.commit()
+                await db.refresh(db_participant)
+
+        # Invalidate leaderboard and snapshot cache
+        redis = get_redis()
+        if redis:
+            await redis.delete(f"leaderboard:{code}")
+            await redis.delete(f"snapshot:{code}")
 
         return {
             "step": step,
@@ -265,27 +287,139 @@ def add_click(code: str, participant_id: str, x: float, y: float, z: float) -> d
             "found_step": db_participant.found_step,
             "found_now": found_now,
         }
-    finally:
-        db.close()
 
 
-def compute_leaderboard(code: str) -> list[dict]:
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+async def add_trajectory(code: str, participant_id: str, points: list[dict]) -> dict:
+    if not points:
+        return {}
+
+    async with AsyncSessionLocal() as db:
+        # 1. Get Session
+        session_stmt = select(SessionModel).where(SessionModel.code == code)
+        result = await db.execute(session_stmt)
+        db_session = result.scalar_one_or_none()
         if not db_session:
             raise KeyError("session not found")
 
-        # Query all participants for this session
-        participants = db.query(ParticipantModel).filter(ParticipantModel.session_id == db_session.id).all()
+        # 2. Get Participant
+        participant_stmt = select(ParticipantModel).where(
+            ParticipantModel.session_id == db_session.id,
+            ParticipantModel.participant_code == participant_id,
+        )
+        result = await db.execute(participant_stmt)
+        db_participant = result.scalar_one_or_none()
+        if not db_participant:
+            raise KeyError("participant not found")
+
+        # 3. Anti-Cheat Verification
+        # Sample up to 5 points to verify
+        sample_size = min(len(points), 5)
+        samples = random.sample(points, sample_size)
+        spec = get_spec(db_session.function_id)
+
+        for p in samples:
+            true_z = evaluate_function(db_session.function_id, p["x"], p["y"])
+            if abs(p["z"] - true_z) > 1e-4:  # Small epsilon for float comparison
+                raise ValueError(f"Anti-cheat verification failed for point ({p['x']}, {p['y']})")
+
+        # 4. Step Management
+        count_stmt = select(func.count(ClickModel.id)).where(ClickModel.participant_id == db_participant.id)
+        result = await db.execute(count_stmt)
+        current_steps = result.scalar() or 0
+        
+        if current_steps + len(points) > db_session.max_steps:
+            raise ValueError("Trajectory would exceed max steps limit")
+
+        # 5. Bulk Insert
+        new_clicks = []
+        best_z = None
+        found_now = False
+        found_step = db_participant.found_step
+
+        for i, p in enumerate(points):
+            step = current_steps + i + 1
+            new_clicks.append({
+                "x": p["x"],
+                "y": p["y"],
+                "z": p["z"],
+                "step": step,
+                "participant_id": db_participant.id
+            })
+
+            # Track best Z in this batch
+            if best_z is None:
+                best_z = p["z"]
+            else:
+                if db_session.goal == "min":
+                    best_z = min(best_z, p["z"])
+                else:
+                    best_z = max(best_z, p["z"])
+
+            # Check if found
+            if found_step is None:
+                if db_session.goal == "min" and p["z"] <= spec.target_z + spec.tolerance:
+                    found_step = step
+                    db_participant.found_step = step
+                    db_participant.found_z = p["z"]
+                    found_now = True
+                elif db_session.goal == "max" and p["z"] >= spec.target_z - spec.tolerance:
+                    found_step = step
+                    db_participant.found_step = step
+                    db_participant.found_z = p["z"]
+                    found_now = True
+
+        # Perform bulk insert
+        if new_clicks:
+            await db.execute(insert(ClickModel), new_clicks)
+        
+        if found_now:
+            await db.commit()
+            await db.refresh(db_participant)
+        else:
+            await db.commit()
+
+        # Invalidate caches
+        redis = get_redis()
+        if redis:
+            await redis.delete(f"leaderboard:{code}")
+            await redis.delete(f"snapshot:{code}")
+
+        return {
+            "batch_size": len(points),
+            "total_steps": current_steps + len(points),
+            "best_z": best_z,
+            "found": db_participant.found_step is not None,
+            "found_step": db_participant.found_step,
+            "found_now": found_now,
+        }
+
+
+async def compute_leaderboard(code: str) -> list[dict]:
+    redis = get_redis()
+    cache_key = f"leaderboard:{code}"
+    cached = await redis.get(cache_key) if redis else None
+    if cached:
+        return json.loads(cached)
+
+    async with AsyncSessionLocal() as db:
+        session_stmt = select(SessionModel).where(SessionModel.code == code)
+        result = await db.execute(session_stmt)
+        db_session = result.scalar_one_or_none()
+        
+        if not db_session:
+            raise KeyError("session not found")
+
+        # Get participants
+        part_stmt = select(ParticipantModel).where(ParticipantModel.session_id == db_session.id)
+        result = await db.execute(part_stmt)
+        participants = result.scalars().all()
         
         rows: list[dict] = []
         for p in participants:
-            # Query best Z and count steps for each participant
-            res = db.query(
-                func.count(ClickModel.id),
-                func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
-            ).filter(ClickModel.participant_id == p.id).first()
+            z_agg = func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
+            res_stmt = select(func.count(ClickModel.id), z_agg).where(ClickModel.participant_id == p.id)
+            res_result = await db.execute(res_stmt)
+            res = res_result.first()
             
             steps = res[0] or 0
             best_z = res[1]
@@ -300,15 +434,10 @@ def compute_leaderboard(code: str) -> list[dict]:
                 "found_step": p.found_step,
             })
 
-        # Sortierlogik:
-        # 1) Found zuerst (found=True vor found=False)
-        # 2) Wenigste found_step (wer schneller "gefunden" hat)
-        # 3) Danach best_z (kleiner ist besser bei min, größer ist besser bei max)
-        # 4) Danach steps
         if db_session.goal == "min":
             rows.sort(
                 key=lambda r: (
-                    not r["found"],  # found=True zuerst
+                    not r["found"],
                     r["found_step"] if r["found_step"] is not None else 10**9,
                     r["best_z"] if r["best_z"] is not None else float("inf"),
                     r["steps"],
@@ -324,24 +453,33 @@ def compute_leaderboard(code: str) -> list[dict]:
                 )
             )
 
+        if redis:
+            await redis.setex(cache_key, settings.CACHE_TTL, json.dumps(rows))
         return rows
-    finally:
-        db.close()
 
-def set_session_status(code: str, status: str) -> Session:
+async def set_session_status(code: str, status: str) -> Session:
     # Invalidate cache
-    _CACHE.pop(("session_basic", code), None)
-    _CACHE.pop(("participants_count", code), None)
+    redis = get_redis()
+    if redis:
+        await redis.delete(f"session_basic:{code}")
+        await redis.delete(f"participants_count:{code}")
+        await redis.delete(f"snapshot:{code}")
 
-    db = SessionLocal()
-    try:
-        db_session = db.query(SessionModel).filter(SessionModel.code == code).first()
+    async with AsyncSessionLocal() as db:
+        stmt = (
+            select(SessionModel)
+            .options(selectinload(SessionModel.participants).selectinload(ParticipantModel.clicks))
+            .where(SessionModel.code == code)
+        )
+        result = await db.execute(stmt)
+        db_session = result.scalar_one_or_none()
+        
         if not db_session:
             raise KeyError("session not found")
 
         db_session.status = status
-        db.commit()
-        db.refresh(db_session)
+        await db.commit()
+        await db.refresh(db_session)
 
         participants = {}
         for p in db_session.participants:
@@ -367,6 +505,3 @@ def set_session_status(code: str, status: str) -> Session:
             participants=participants,
             max_steps=db_session.max_steps
         )
-    finally:
-        db.close()
-

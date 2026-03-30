@@ -9,6 +9,7 @@ import {
   getLeaderboard,
   getSessionInfo,
   getSessionSnapshot,
+  getWebSocket,
   joinSession,
   startHillClimbBot,
   startRandomBot,
@@ -33,11 +34,11 @@ const LS_NAME = "opt2d_name";
 const LS_CREATED_CODE = "opt2d_created_code";
 const LS_ADMIN_TOKEN = "opt2d_admin_token";
 const LS_SESSION_CTX = "opt2d_session_ctx";
-const TEACHER_INFO_POLL_MS = 3000;
-const PARTICIPANT_INFO_POLL_MS = 5000;
-const SNAPSHOT_POLL_MS = 6000;
+const TEACHER_INFO_POLL_MS = 10000;
+const PARTICIPANT_INFO_POLL_MS = 10000;
+const SNAPSHOT_POLL_MS = 8000;
 const REVEAL_POLL_MS = 8000;
-const HIDDEN_TAB_POLL_MS = 15000;
+const HIDDEN_TAB_POLL_MS = 30000;
 
 type SessionCtx = {
   code: string;
@@ -455,6 +456,69 @@ export default function App() {
 
     sync();
   }, [code]);
+
+  useEffect(() => {
+    if (!activeSessionCode.trim()) return;
+
+    let socket: WebSocket | null = null;
+    let reconnectTimeout: number | null = null;
+
+    function connect() {
+      if (socket) socket.close();
+      
+      const s = getWebSocket(activeSessionCode.trim());
+      socket = s;
+
+      s.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          const { type, data } = msg;
+
+          if (type === "click_added") {
+            if (data.participant_id === participantId) {
+              // It's my own click, might already be in state from handleEvaluate, 
+              // but we update anyway to be sure.
+              setPoints((prev) => {
+                const exists = prev.some(p => p.step === data.step);
+                if (exists) return prev;
+                return [...prev, { x: data.x, y: data.y, z: data.z, step: data.step }];
+              });
+            }
+            if (data.leaderboard) {
+              setLeaderboard({ leaderboard: data.leaderboard });
+            }
+          } else if (type === "participant_joined") {
+            setParticipantsCount(data.participants_count);
+          } else if (type === "leaderboard_updated") {
+            if (data.leaderboard) {
+              setLeaderboard({ leaderboard: data.leaderboard });
+            }
+          } else if (type === "session_ended") {
+            setSessionStatus("ended");
+          }
+        } catch (e) {
+          console.error("WS message error", e);
+        }
+      };
+
+      s.onclose = () => {
+        // Reconnect after 3 seconds
+        reconnectTimeout = window.setTimeout(() => {
+          connect();
+        }, 3000);
+      };
+    }
+
+    connect();
+
+    return () => {
+      if (socket) {
+        socket.onclose = null; // Prevent reconnect on intentional close
+        socket.close();
+      }
+      if (reconnectTimeout) window.clearTimeout(reconnectTimeout);
+    };
+  }, [activeSessionCode, participantId]);
 
   useEffect(() => {
     if (!activeSessionCode.trim()) return;

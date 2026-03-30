@@ -2,7 +2,12 @@ fastapi
 uvicorn[standard]
 sqlalchemy
 pydantic
+pydantic-settings
 requests
 pytest
 httpx
 pytest-asyncio
+asyncpg
+greenlet
+redis
+aiosqlite

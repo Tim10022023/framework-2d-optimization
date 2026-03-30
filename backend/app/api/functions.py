@@ -5,5 +5,5 @@ router = APIRouter(prefix="/functions", tags=["functions"])
 
 
 @router.get("")
-def list_functions():
+async def list_functions():
     return {"functions": list_function_specs()}

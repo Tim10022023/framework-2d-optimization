@@ -1,25 +1,20 @@
 import os
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
-
-from sqlalchemy import event
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", 
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/opt2d"
 )
 
-# Enable WAL mode for SQLite
-if DATABASE_URL.startswith("sqlite"):
-    @event.listens_for(engine, "connect")
-    def set_sqlite_pragma(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
-        cursor.close()
+engine = create_async_engine(DATABASE_URL, echo=False)
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine, 
+    class_=AsyncSession, 
+    expire_on_commit=False,
+    autoflush=False
+)
+
 Base = declarative_base()
