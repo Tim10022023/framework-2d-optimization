@@ -1,16 +1,18 @@
+version: '3.8'
+
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:16-alpine
     container_name: opt2d-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-opt2d}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opt2d_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-opt2d_db}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - opt2d_db_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opt2d -d opt2d_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,26 +28,25 @@ services:
       retries: 5
 
   backend:
-    image: opt2d-backend:latest
+    image: framework-2d-optimization-backend:latest
     container_name: opt2d-backend
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - db
+      - redis
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-opt2d}:${POSTGRES_PASSWORD:-opt2d_pass}@db/${POSTGRES_DB:-opt2d_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
       VITE_TEACHER_PIN: ${VITE_TEACHER_PIN}
     volumes:
+      - opt2d_backend_data:/app/backend/data
       - opt2d_backend_static:/app/backend/app/static
     restart: unless-stopped
 
   frontend:
-    image: opt2d-frontend:latest
+    image: framework-2d-optimization-frontend:latest
     container_name: opt2d-frontend
     ports:
       - "5173:80"
@@ -55,4 +56,5 @@ services:
 
 volumes:
   opt2d_db_data:
+  opt2d_backend_data:
   opt2d_backend_static:

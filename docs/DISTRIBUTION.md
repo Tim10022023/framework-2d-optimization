@@ -21,7 +21,7 @@ Provide these to students who will write optimization algorithms:
 - **Guide:** `docs/student_bot_guide.md`
 - **Library File:** `bot/blackbox_client.py` (The API client)
 - **Template File:** `bot/student_bot_template.py` (The starter code)
-- **API URL:** The backend URL (usually `http://SERVER-IP:8000`).
+- **API URL:** The backend URL (usually `http://SERVER-IP:8001`).
 - **Session Code:** Provided by the teacher.
 
 ---
