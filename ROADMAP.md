@@ -18,14 +18,21 @@ Status: [DONE]
 
 ---
 
-## Phase 2: Upgraded Student Workflow (Local Evaluation without Leaking) (COMPLETED)
+## Phase 2: Scalable Optimization & GA Support (COMPLETED)
 
 Status: [DONE]
-- [x] **Obfuscated Payload:** Implemented RPN bytecode generation in `functions.py`.
+- [x] **RPN Bytecode:** Server provides obfuscated mathematical representation to clients.
 - [x] **Local Evaluation:** Added RPN interpreter to `blackbox_client.py` for zero-latency searching.
-- [x] **Trajectory Syncing:** New `POST /sync_trajectory` endpoint for batch submission of points.
-- [x] **Anti-Cheat:** Server-side verification of a random sample of trajectory points.
-- [x] **Performance:** Reduced network overhead by 99% for optimized bots.
+- [x] **Trajectory Syncing:** New `POST /sync_trajectory` endpoint for batch submission.
+- [x] **Scalable Snapshot (Downsampling):**
+    - Implement server-side downsampling for `/{code}/snapshot`.
+    - Automatically reduce trajectory points for UI display (e.g., every N-th point + best + latest) when counts exceed 1000 per participant.
+- [x] **Educational GA Template:**
+    - Create a dedicated `bot/genetic_algorithm_template.py`.
+    - Provide a structured framework for Population, Selection, Crossover, and Mutation using `evaluate_local`.
+- [x] **Teacher UI Stability:**
+    - Optimized `TeacherInspectPanel` and `PlotCanvas` to handle decimated streams.
+    - Improved state safety to prevent double-counting of clicks.
 
 ---
 

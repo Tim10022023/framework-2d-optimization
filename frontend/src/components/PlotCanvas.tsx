@@ -8,6 +8,7 @@ type PlotCanvasProps = {
   sessionStatus: string;
   bounds: Bounds;
   points: Point[];
+  goal: "min" | "max";
   disableClick?: boolean;
   size?: number;
   extraParticipants?: {
@@ -48,6 +49,7 @@ export default function PlotCanvas({
   sessionStatus,
   bounds,
   points,
+  goal,
   extraParticipants,
   onEvaluate,
 }: PlotCanvasProps) {
@@ -173,16 +175,23 @@ export default function PlotCanvas({
       ctx.restore();
     }
 
-    // Bester Punkt (min z)
+    // Bester Punkt (min/max z)
     let bestIndex = -1;
     if (points.length > 0) {
       let bestZ = points[0].z;
       bestIndex = 0;
 
       for (let i = 1; i < points.length; i++) {
-        if (points[i].z < bestZ) {
-          bestZ = points[i].z;
-          bestIndex = i;
+        if (goal === "min") {
+          if (points[i].z < bestZ) {
+            bestZ = points[i].z;
+            bestIndex = i;
+          }
+        } else {
+          if (points[i].z > bestZ) {
+            bestZ = points[i].z;
+            bestIndex = i;
+          }
         }
       }
     }

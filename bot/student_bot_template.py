@@ -8,8 +8,8 @@ from blackbox_client import BlackBoxClient
 
 
 # --- Konfiguration ---
-API_URL = "http://10.50.15.53:8001/"
-SESSION_CODE = "967D47"  # Bitte durch aktuellen Code ersetzen
+API_URL = "http://localhost:8000/"
+SESSION_CODE = "91198B"  # Bitte durch aktuellen Code ersetzen
 BOT_NAME = f"Bot-Student-{random.randint(100, 999)}"
 
 
@@ -84,7 +84,7 @@ class LocalSearchBot:
                     break
             
             if not found_better:
-                step_size *= 0.5
+                step_size *= 0.0001
                 if step_size < 1e-5:
                     break
 

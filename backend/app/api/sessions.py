@@ -118,10 +118,14 @@ async def join(code: str, body: JoinSessionBody):
         "participants_count": await get_participants_count(code)
     })
 
+    spec = get_spec(s.function_id) if s else None
+
     return {
         "participant_id": p.id,
         "name": p.name,
         "session_code": code,
+        "goal": s.goal if s else "min",
+        "bounds": spec.bounds if spec else {"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5},
         "blackbox": get_blackbox_payload(s.function_id) if s else None
     }
 
@@ -443,40 +447,18 @@ async def bot_hill_climb(
 
 @router.get("/{code}/snapshot")
 async def session_snapshot(code: str):
+    from app.core.store import get_session_snapshot
+    
     redis = get_redis()
     cache_key = f"snapshot:{code}"
     cached = await redis.get(cache_key) if redis else None
     if cached:
         return json.loads(cached)
 
-    s = await get_session(code)
-    if not s:
+    res = await get_session_snapshot(code)
+    if not res:
         raise HTTPException(status_code=404, detail="session not found")
 
-    participants = []
-    for p in s.participants.values():
-        participants.append(
-            {
-                "participant_id": p.id,
-                "name": p.name,
-                "is_bot": getattr(p, "is_bot", False),
-                "found": p.found_step is not None,
-                "found_step": p.found_step,
-                "clicks": [
-                    {"x": c.x, "y": c.y, "z": c.z, "step": i + 1}
-                    for i, c in enumerate(p.clicks)
-                ],
-            }
-        )
-
-    res = {
-        "session_code": s.code,
-        "status": s.status,
-        "function_id": s.function_id,
-        "goal": s.goal,
-        "participants": participants,
-    }
-    
     if redis:
         await redis.setex(cache_key, settings.SNAPSHOT_CACHE_TTL, json.dumps(res))
     return res

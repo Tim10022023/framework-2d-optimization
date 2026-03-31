@@ -75,18 +75,21 @@ export default function TeacherInspectPanel({
 
   const points: Point[] = useMemo(() => {
     if (!selected) return [];
-    return selected.clicks.slice(0, visibleStep).map((c, idx) => ({
+    return selected.clicks.slice(0, visibleStep).map((c) => ({
       x: c.x,
       y: c.y,
       z: c.z,
-      step: idx + 1,
+      step: c.step,
     }));
   }, [selected, visibleStep]);
 
+  const goal = snapshot?.goal as "min" | "max" ?? "min";
+
   const bestZ = useMemo(() => {
     if (points.length === 0) return null;
-    return Math.min(...points.map((p) => p.z));
-  }, [points]);
+    const zs = points.map((p) => p.z);
+    return goal === "min" ? Math.min(...zs) : Math.max(...zs);
+  }, [points, goal]);
 
   const canShowReveal = revealed && !!revealFunctionId;
   const renderRevealPlots = canShowReveal && showRevealPlots;
@@ -210,6 +213,7 @@ export default function TeacherInspectPanel({
                 sessionStatus={sessionStatus}
                 bounds={bounds}
                 points={points}
+                goal={goal}
                 onEvaluate={async () => {}}
                 disableClick={true}
                 hideDetails={true}

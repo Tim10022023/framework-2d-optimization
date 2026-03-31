@@ -69,7 +69,7 @@ export type SessionInfo = {
   revealed: boolean;
 };
 
-export type SnapshotClick = { x: number; y: number; z: number };
+export type SnapshotClick = { x: number; y: number; z: number; step: number };
 
 export type SnapshotParticipant = {
   participant_id: string;

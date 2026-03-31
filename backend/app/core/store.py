@@ -175,6 +175,103 @@ async def get_session(code: str) -> Optional[Session]:
             max_steps=db_session.max_steps
         )
 
+
+async def get_session_snapshot(code: str, max_points_per_participant: int = 200) -> dict:
+    """
+    Returns a downsampled snapshot of the session. 
+    If a participant has more than max_points_per_participant clicks, 
+    the result is decimated to include:
+    - The first click (step 1)
+    - The best click (global min/max)
+    - The latest click
+    - A uniform sample of points in between
+    """
+    async with AsyncSessionLocal() as db:
+        session_stmt = select(SessionModel).where(SessionModel.code == code)
+        result = await db.execute(session_stmt)
+        db_session = result.scalar_one_or_none()
+        if not db_session:
+            return None
+
+        # Get all participants
+        part_stmt = select(ParticipantModel).where(ParticipantModel.session_id == db_session.id)
+        result = await db.execute(part_stmt)
+        participants_db = result.scalars().all()
+
+        participants_res = []
+        for p in participants_db:
+            # Get total count
+            count_stmt = select(func.count(ClickModel.id)).where(ClickModel.participant_id == p.id)
+            total_count = (await db.execute(count_stmt)).scalar() or 0
+
+            clicks_res = []
+            if total_count > 0:
+                if total_count <= max_points_per_participant:
+                    # Load all
+                    click_stmt = select(ClickModel).where(ClickModel.participant_id == p.id).order_by(ClickModel.step)
+                    clicks_db = (await db.execute(click_stmt)).scalars().all()
+                    clicks_res = [{"x": c.x, "y": c.y, "z": c.z, "step": c.step} for c in clicks_db]
+                else:
+                    # DOWNSAMPLING LOGIC
+                    # 1. Get Best Point
+                    best_op = func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
+                    best_z_val = (await db.execute(select(best_op).where(ClickModel.participant_id == p.id))).scalar()
+                    best_click_stmt = select(ClickModel).where(
+                        ClickModel.participant_id == p.id, 
+                        ClickModel.z == best_z_val
+                    ).limit(1)
+                    best_click = (await db.execute(best_click_stmt)).scalar()
+
+                    # 2. Get Sampled Points (including first and last)
+                    # We use a stride to pick points
+                    stride = total_count // (max_points_per_participant - 1)
+                    # Use modulo in SQL to sample
+                    sample_stmt = select(ClickModel).where(
+                        ClickModel.participant_id == p.id,
+                        (ClickModel.step - 1) % stride == 0
+                    ).order_by(ClickModel.step).limit(max_points_per_participant)
+                    
+                    sampled_clicks = (await db.execute(sample_stmt)).scalars().all()
+                    
+                    # 3. Combine and Deduplicate (ensure best and last are in)
+                    last_click_stmt = select(ClickModel).where(ClickModel.participant_id == p.id).order_by(ClickModel.step.desc()).limit(1)
+                    last_click = (await db.execute(last_click_stmt)).scalar()
+                    
+                    seen_steps = set()
+                    for c in sampled_clicks:
+                        if c.step not in seen_steps:
+                            clicks_res.append({"x": c.x, "y": c.y, "z": c.z, "step": c.step})
+                            seen_steps.add(c.step)
+                    
+                    if best_click and best_click.step not in seen_steps:
+                        clicks_res.append({"x": best_click.x, "y": best_click.y, "z": best_click.z, "step": best_click.step})
+                        seen_steps.add(best_click.step)
+                    
+                    if last_click and last_click.step not in seen_steps:
+                        clicks_res.append({"x": last_click.x, "y": last_click.y, "z": last_click.z, "step": last_click.step})
+                        seen_steps.add(last_click.step)
+                    
+                    # Sort by step again for the UI
+                    clicks_res.sort(key=lambda x: x["step"])
+
+            participants_res.append({
+                "participant_id": p.participant_code,
+                "name": p.name,
+                "is_bot": p.is_bot,
+                "found": p.found_step is not None,
+                "found_step": p.found_step,
+                "clicks": clicks_res,
+                "total_clicks": total_count 
+            })
+
+        return {
+            "session_code": db_session.code,
+            "status": db_session.status,
+            "function_id": db_session.function_id,
+            "goal": db_session.goal,
+            "participants": participants_res,
+        }
+
 async def join_session(code: str, name: str, is_bot: bool = False) -> Participant:
     # Invalidate participant count and snapshot cache
     redis = get_redis()
@@ -492,6 +589,7 @@ async def set_session_status(code: str, status: str) -> Session:
                 id=p.participant_code,
                 name=p.name,
                 clicks=clicks,
+                is_bot=getattr(p, "is_bot", False),
                 found_step=p.found_step,
                 found_z=p.found_z,
             )

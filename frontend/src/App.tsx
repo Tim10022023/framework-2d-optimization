@@ -314,7 +314,11 @@ export default function App() {
 
     try {
       const r = await evaluatePoint(code.trim(), participantId, x, y);
-      setPoints((prev) => [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }]);
+      setPoints((prev) => {
+        const exists = prev.some((p) => p.step === r.step);
+        if (exists) return prev;
+        return [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }];
+      });
     } catch (e: unknown) {
       const error = e instanceof Error ? e : new Error(String(e));
       const msg = error?.message ?? String(e);
@@ -623,11 +627,11 @@ export default function App() {
           return;
         }
 
-        const restored = me.clicks.map((c, idx) => ({
+        const restored = me.clicks.map((c) => ({
           x: c.x,
           y: c.y,
           z: c.z,
-          step: idx + 1,
+          step: c.step,
         }));
         setPoints(restored);
       } catch {
@@ -789,6 +793,7 @@ export default function App() {
                       sessionStatus={sessionStatus}
                       bounds={activeBounds}
                       points={points}
+                      goal={selectedGoal}
                       onEvaluate={handleEvaluate}
                       extraParticipants={
                         showOnlyBots && snapshot
@@ -799,11 +804,11 @@ export default function App() {
                                 name: p.name,
                                 isBot: p.is_bot,
                                 color: undefined,
-                                clicks: p.clicks.map((c, idx) => ({
+                                clicks: p.clicks.map((c) => ({
                                   x: c.x,
                                   y: c.y,
                                   z: c.z,
-                                  step: idx + 1,
+                                  step: c.step,
                                 })),
                               }))
                           : []

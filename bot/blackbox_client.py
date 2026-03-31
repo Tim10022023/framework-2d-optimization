@@ -32,7 +32,7 @@ class BlackBoxClient:
             max_steps=data["max_steps"],
         )
 
-    def join(self, name: str, is_bot: bool = True) -> str:
+    def join(self, name: str, is_bot: bool = True) -> dict[str, Any]:
         r = requests.post(
             f"{self.api_url}/sessions/{self.session_code}/join",
             json={"name": name, "is_bot": is_bot},
@@ -42,7 +42,7 @@ class BlackBoxClient:
         data = r.json()
         self.participant_id = data["participant_id"]
         self.blackbox_payload = data.get("blackbox")
-        return self.participant_id
+        return data
 
     def evaluate(self, x: float, y: float) -> dict[str, Any]:
         """Official evaluation on the server (counts as a step)."""
