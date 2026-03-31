@@ -1,6 +1,24 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgres:15-alpine
+    container_name: opt2d-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: opt2d
+    volumes:
+      - opt2d_db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d opt2d"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -9,10 +27,23 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: sqlite:///./data/app.db
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/opt2d
+      REDIS_URL: redis://redis:6379/0
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:5173}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - opt2d_data:/app/backend/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: opt2d-redis
+    ports:
+      - "6379:6379"
     restart: unless-stopped
 
   frontend:
@@ -38,3 +69,4 @@ services:
 
 volumes:
   opt2d_data:
+  opt2d_db_data:

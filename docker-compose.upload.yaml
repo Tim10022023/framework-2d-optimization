@@ -1,14 +1,47 @@
 services:
+  db:
+    image: postgres:17-alpine
+    container_name: opt2d-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opt2d}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opt2d_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-opt2d_db}
+    volumes:
+      - opt2d_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opt2d -d opt2d_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: opt2d-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     image: opt2d-backend:latest
     container_name: opt2d-backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - "8001:8000"
+      - "8000:8000"
     environment:
-      DATABASE_URL: sqlite:///./data/app.db
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-opt2d}:${POSTGRES_PASSWORD:-opt2d_pass}@db/${POSTGRES_DB:-opt2d_db}
+      REDIS_URL: redis://redis:6379/0
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
+      VITE_TEACHER_PIN: ${VITE_TEACHER_PIN}
     volumes:
-      - opt2d_data:/app/backend/data
+      - opt2d_backend_static:/app/backend/app/static
     restart: unless-stopped
 
   frontend:
@@ -21,4 +54,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  opt2d_data:
+  opt2d_db_data:
+  opt2d_backend_static:

@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,11 +9,32 @@ from app.db.session import Base, engine
 from app.db import models
 from app.api.functions import router as functions_router
 from app.api.sessions import router as sessions_router
+from app.core.config import settings
+from app.core.redis import init_redis, close_redis
+from app.core.websocket import manager
+import asyncio
 
-app = FastAPI(title="2D Optimization Framework")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Create tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    # Startup: Initialize Redis
+    await init_redis()
+
+    # Startup: Run Redis Pub/Sub listener in the background
+    pubsub_task = asyncio.create_task(manager.pubsub_listener())
+    
+    yield
+    # Shutdown: Clean up
+    pubsub_task.cancel()
+    await engine.dispose()
+    await close_redis()
+
+app = FastAPI(title="2D Optimization Framework", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-Base.metadata.create_all(bind=engine)
 
 cors_origins_env = os.getenv(
     "BACKEND_CORS_ORIGINS",
@@ -30,11 +52,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/health")
-def health():
+async def health():
     return {"status": "ok"}
-
 
 app.include_router(functions_router)
 app.include_router(sessions_router)

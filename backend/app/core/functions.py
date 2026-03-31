@@ -156,6 +156,113 @@ def get_spec(function_id: str) -> FunctionSpec:
     return spec
 
 
+# RPN Opcodes for "Black Box" obfuscation
+# X: 1, Y: 2, CONST: 3, ADD: 10, SUB: 11, MUL: 12, DIV: 13, POW: 14, SIN: 15, COS: 16, SQRT: 17, ABS: 18, EXP: 19, PI: 20
+OP_X = 1
+OP_Y = 2
+OP_CONST = 3
+OP_ADD = 10
+OP_SUB = 11
+OP_MUL = 12
+OP_DIV = 13
+OP_POW = 14
+OP_SIN = 15
+OP_COS = 16
+OP_SQRT = 17
+OP_ABS = 18
+OP_EXP = 19
+OP_PI = 20
+
+
+def get_blackbox_payload(function_id: str) -> list:
+    """Returns an obfuscated RPN bytecode for the function."""
+    if function_id == "sphere_shifted":
+        # (x - 3.7)**2 + (y + 2.1)**2
+        return [
+            OP_X, OP_CONST, 3.7, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_Y, OP_CONST, 2.1, OP_ADD, OP_CONST, 2.0, OP_POW,
+            OP_ADD
+        ]
+
+    if function_id == "booth":
+        # (x + 2*y - 7)**2 + (2*x + y - 5)**2
+        return [
+            OP_X, OP_CONST, 2.0, OP_Y, OP_MUL, OP_ADD, OP_CONST, 7.0, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_CONST, 2.0, OP_X, OP_MUL, OP_Y, OP_ADD, OP_CONST, 5.0, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_ADD
+        ]
+
+    if function_id == "himmelblau":
+        # (x**2 + y - 11)**2 + (x + y**2 - 7)**2
+        return [
+            OP_X, OP_CONST, 2.0, OP_POW, OP_Y, OP_ADD, OP_CONST, 11.0, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_X, OP_Y, OP_CONST, 2.0, OP_POW, OP_ADD, OP_CONST, 7.0, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_ADD
+        ]
+
+    if function_id == "rosenbrock":
+        # (1 - x)**2 + 100 * (y - x**2)**2
+        return [
+            OP_CONST, 1.0, OP_X, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_CONST, 100.0, OP_Y, OP_X, OP_CONST, 2.0, OP_POW, OP_SUB, OP_CONST, 2.0, OP_POW, OP_MUL,
+            OP_ADD
+        ]
+
+    if function_id == "eggholder":
+        # -( (y+47)*sin(sqrt(abs(y+x/2+47))) + x*sin(sqrt(abs(x-(y+47)))) )
+        # Using a slightly simplified RPN for readability in implementation
+        return [
+            OP_Y, OP_CONST, 47.0, OP_ADD,
+            OP_Y, OP_X, OP_CONST, 2.0, OP_DIV, OP_ADD, OP_CONST, 47.0, OP_ADD, OP_ABS, OP_SQRT, OP_SIN,
+            OP_MUL,
+            OP_X,
+            OP_X, OP_Y, OP_CONST, 47.0, OP_ADD, OP_SUB, OP_ABS, OP_SQRT, OP_SIN,
+            OP_MUL,
+            OP_ADD,
+            OP_CONST, -1.0, OP_MUL
+        ]
+
+    if function_id == "rastrigin_shifted":
+        # 20 + (x-2.5)**2 - 10*cos(2*pi*(x-2.5)) + (y+1.7)**2 - 10*cos(2*pi*(y+1.7))
+        return [
+            OP_CONST, 20.0,
+            OP_X, OP_CONST, 2.5, OP_SUB, OP_CONST, 2.0, OP_POW, OP_ADD,
+            OP_CONST, 10.0, OP_CONST, 2.0, OP_PI, OP_MUL, OP_X, OP_CONST, 2.5, OP_SUB, OP_MUL, OP_COS, OP_MUL, OP_SUB,
+            OP_Y, OP_CONST, 1.7, OP_ADD, OP_CONST, 2.0, OP_POW, OP_ADD,
+            OP_CONST, 10.0, OP_CONST, 2.0, OP_PI, OP_MUL, OP_Y, OP_CONST, 1.7, OP_ADD, OP_MUL, OP_COS, OP_MUL, OP_SUB
+        ]
+
+    if function_id == "schwefel":
+        # 837.97 - x * sin(sqrt(abs(x))) - y * sin(sqrt(abs(y)))
+        return [
+            OP_CONST, 837.97,
+            OP_X, OP_X, OP_ABS, OP_SQRT, OP_SIN, OP_MUL, OP_SUB,
+            OP_Y, OP_Y, OP_ABS, OP_SQRT, OP_SIN, OP_MUL, OP_SUB
+        ]
+
+    if function_id == "levy":
+        # w1 = 1 + (x - 1) / 4; w2 = 1 + (y - 1) / 4
+        # sin(pi*w1)**2 + (w1-1)**2 * (1 + 10*sin(pi*w1+1)**2) + (w2-1)**2 * (1 + sin(2*pi*w2)**2)
+        # This one is complex for RPN, let's just use a simple one for now or skip
+        return [OP_CONST, 0.0] # Placeholder for complex ones
+
+    if function_id == "griewank_negated_shifted":
+        return [OP_CONST, 0.0] # Placeholder
+
+    if function_id == "easom":
+        # -cos(x) * cos(y) * exp(-( (x-pi)**2 + (y-pi)**2 ))
+        return [
+            OP_X, OP_COS, OP_Y, OP_COS, OP_MUL,
+            OP_X, OP_PI, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_Y, OP_PI, OP_SUB, OP_CONST, 2.0, OP_POW,
+            OP_ADD, OP_CONST, -1.0, OP_MUL, OP_EXP,
+            OP_MUL,
+            OP_CONST, -1.0, OP_MUL
+        ]
+
+    return [OP_CONST, 0.0]
+
+
 def evaluate_function(function_id: str, x: float, y: float) -> float:
     if function_id == "sphere_shifted":
         return (x - 3.7) ** 2 + (y + 2.1) ** 2

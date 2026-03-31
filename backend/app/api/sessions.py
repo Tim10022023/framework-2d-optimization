@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 import random
-import time
+import asyncio
+import json
 
 from app.core.store import (
     add_click,
@@ -13,7 +14,10 @@ from app.core.store import (
     join_session,
     set_session_status,
 )
-from app.core.functions import evaluate_function, get_spec
+from app.core.functions import evaluate_function, get_spec, get_blackbox_payload
+from app.core.websocket import manager
+from app.core.redis import get_redis
+from app.core.config import settings
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -41,7 +45,7 @@ def require_admin_token(session, admin_token: str):
 
 
 @router.post("")
-def create_new_session(body: CreateSessionBody):
+async def create_new_session(body: CreateSessionBody):
     if body.goal not in ("min", "max"):
         raise HTTPException(status_code=400, detail="goal must be 'min' or 'max'")
 
@@ -56,7 +60,7 @@ def create_new_session(body: CreateSessionBody):
             detail=f"goal '{body.goal}' not allowed for function '{body.function_id}'",
         )
 
-    s = create_session(
+    s = await create_session(
         function_id=body.function_id,
         goal=body.goal,
         max_steps=body.max_steps,
@@ -71,8 +75,8 @@ def create_new_session(body: CreateSessionBody):
 
 
 @router.get("/{code}")
-def get_session_info(code: str):
-    s = get_session_basic(code)
+async def get_session_info(code: str):
+    s = await get_session_basic(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -80,43 +84,97 @@ def get_session_info(code: str):
         "session_code": s.code,
         "function_id": s.function_id,
         "goal": s.goal,
-        "participants": get_participants_count(code),
+        "participants": await get_participants_count(code),
         "status": s.status,
         "max_steps": s.max_steps,
     }
 
 
 @router.get("/{code}/public")
-def get_public_session_info(code: str):
-    s = get_session_basic(code)
+async def get_public_session_info(code: str):
+    s = await get_session_basic(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
     return {
         "session_code": s.code,
-        "participants": get_participants_count(code),
+        "participants": await get_participants_count(code),
         "status": s.status,
         "max_steps": s.max_steps,
     }
 
 
 @router.post("/{code}/join")
-def join(code: str, body: JoinSessionBody):
+async def join(code: str, body: JoinSessionBody):
     try:
-        p = join_session(code=code, name=body.name, is_bot=body.is_bot)
+        p = await join_session(code=code, name=body.name, is_bot=body.is_bot)
+        s = await get_session_basic(code)
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
+
+    await manager.trigger_update(code, "participant_joined", {
+        "participant_id": p.id,
+        "name": p.name,
+        "participants_count": await get_participants_count(code)
+    })
 
     return {
         "participant_id": p.id,
         "name": p.name,
         "session_code": code,
+        "blackbox": get_blackbox_payload(s.function_id) if s else None
     }
 
 
+class TrajectoryPoint(BaseModel):
+    x: float
+    y: float
+    z: float
+
+class SyncTrajectoryBody(BaseModel):
+    participant_id: str
+    points: list[TrajectoryPoint]
+
+
+@router.post("/{code}/sync_trajectory")
+async def sync_trajectory(code: str, body: SyncTrajectoryBody):
+    from app.core.store import add_trajectory
+    
+    try:
+        result = await add_trajectory(
+            code=code,
+            participant_id=body.participant_id,
+            points=[{"x": p.x, "y": p.y, "z": p.z} for p in body.points]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="session or participant not found")
+
+    await manager.trigger_update(code, "leaderboard_updated", {
+        "leaderboard": await compute_leaderboard(code)
+    })
+
+    return result
+
+
+@router.websocket("/{code}/ws")
+async def session_websocket(websocket: WebSocket, code: str):
+    await manager.connect(code, websocket)
+    try:
+        while True:
+            # Keep connection alive, though we mostly broadcast from server to client
+            data = await websocket.receive_text()
+            # Handle potential client messages if needed
+    except WebSocketDisconnect:
+        manager.disconnect(code, websocket)
+    except Exception:
+        manager.disconnect(code, websocket)
+
+
 @router.post("/{code}/evaluate")
-def evaluate(code: str, body: EvaluateBody):
-    s = get_session_basic(code)
+async def evaluate(code: str, body: EvaluateBody):
+    s = await get_session_basic(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
     if s.status == "ended":
@@ -128,7 +186,7 @@ def evaluate(code: str, body: EvaluateBody):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        result = add_click(
+        result = await add_click(
             code=code,
             participant_id=body.participant_id,
             x=body.x,
@@ -145,6 +203,15 @@ def evaluate(code: str, body: EvaluateBody):
             raise HTTPException(status_code=404, detail="participant not found")
         raise HTTPException(status_code=404, detail="session not found")
 
+    await manager.trigger_update(code, "click_added", {
+        "participant_id": body.participant_id,
+        "x": body.x,
+        "y": body.y,
+        "z": z,
+        "leaderboard": await compute_leaderboard(code),
+        **result,
+    })
+
     return {
         "x": body.x,
         "y": body.y,
@@ -154,9 +221,9 @@ def evaluate(code: str, body: EvaluateBody):
 
 
 @router.get("/{code}/leaderboard")
-def leaderboard(code: str):
+async def leaderboard(code: str):
     try:
-        rows = compute_leaderboard(code)
+        rows = await compute_leaderboard(code)
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -167,14 +234,17 @@ def leaderboard(code: str):
 
 
 @router.post("/{code}/end")
-def end_session(code: str, x_admin_token: str = Header(default="")):
-    s = get_session(code)
+async def end_session(code: str, x_admin_token: str = Header(default="")):
+    s = await get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
     require_admin_token(s, x_admin_token)
 
-    updated = set_session_status(code, "ended")
+    updated = await set_session_status(code, "ended")
+    await manager.trigger_update(code, "session_ended", {
+        "status": updated.status
+    })
     return {
         "session_code": code,
         "status": updated.status,
@@ -182,8 +252,8 @@ def end_session(code: str, x_admin_token: str = Header(default="")):
 
 
 @router.get("/{code}/export")
-def export_session(code: str, x_admin_token: str = Header(default="")):
-    s = get_session(code)
+async def export_session(code: str, x_admin_token: str = Header(default="")):
+    s = await get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -226,19 +296,19 @@ def export_session(code: str, x_admin_token: str = Header(default="")):
             "image": spec.reveal_image,
         },
         "participants": participants,
-        "leaderboard": compute_leaderboard(code),
+        "leaderboard": await compute_leaderboard(code),
     }
 
 
 @router.post("/{code}/bots/random_search")
-def bot_random_search(
+async def bot_random_search(
     code: str,
     admin_token: str,
     n: int = 20,
     seed: int | None = None,
     delay_ms: int = 0,
 ):
-    s = get_session(code)
+    s = await get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -256,7 +326,7 @@ def bot_random_search(
 
     bot_name = f"Bot-Random(n={n})"
     try:
-        bot = join_session(code=code, name=bot_name, is_bot=True)
+        bot = await join_session(code=code, name=bot_name, is_bot=True)
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -267,10 +337,10 @@ def bot_random_search(
         x = random.uniform(b["xmin"], b["xmax"])
         y = random.uniform(b["ymin"], b["ymax"])
         z = evaluate_function(s.function_id, x, y)
-        add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+        await add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
 
         if delay_ms > 0:
-            time.sleep(delay_ms / 1000.0)
+            await asyncio.sleep(delay_ms / 1000.0)
 
     return {
         "session_code": code,
@@ -281,7 +351,7 @@ def bot_random_search(
 
 
 @router.post("/{code}/bots/hill_climb")
-def bot_hill_climb(
+async def bot_hill_climb(
     code: str,
     admin_token: str,
     n: int = 30,
@@ -289,7 +359,7 @@ def bot_hill_climb(
     seed: int | None = None,
     delay_ms: int = 0,
 ):
-    s = get_session(code)
+    s = await get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -309,7 +379,7 @@ def bot_hill_climb(
 
     bot_name = f"Bot-HillClimb(n={n},h={step_size})"
     try:
-        bot = join_session(code=code, name=bot_name, is_bot=True)
+        bot = await join_session(code=code, name=bot_name, is_bot=True)
     except KeyError:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -319,10 +389,10 @@ def bot_hill_climb(
     x = random.uniform(b["xmin"], b["xmax"])
     y = random.uniform(b["ymin"], b["ymax"])
     z = evaluate_function(s.function_id, x, y)
-    add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+    await add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
 
     if delay_ms > 0:
-        time.sleep(delay_ms / 1000.0)
+        await asyncio.sleep(delay_ms / 1000.0)
 
     def neighbors(cx: float, cy: float):
         return [
@@ -357,10 +427,10 @@ def bot_hill_climb(
         else:
             x, y, z = best_x, best_y, best_z
 
-        add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
+        await add_click(code=code, participant_id=bot.id, x=x, y=y, z=z)
 
         if delay_ms > 0:
-            time.sleep(delay_ms / 1000.0)
+            await asyncio.sleep(delay_ms / 1000.0)
 
     return {
         "session_code": code,
@@ -372,8 +442,14 @@ def bot_hill_climb(
 
 
 @router.get("/{code}/snapshot")
-def session_snapshot(code: str):
-    s = get_session(code)
+async def session_snapshot(code: str):
+    redis = get_redis()
+    cache_key = f"snapshot:{code}"
+    cached = await redis.get(cache_key) if redis else None
+    if cached:
+        return json.loads(cached)
+
+    s = await get_session(code)
     if not s:
         raise HTTPException(status_code=404, detail="session not found")
 
@@ -393,11 +469,14 @@ def session_snapshot(code: str):
             }
         )
 
-    return {
+    res = {
         "session_code": s.code,
         "status": s.status,
         "function_id": s.function_id,
         "goal": s.goal,
         "participants": participants,
     }
-
+    
+    if redis:
+        await redis.setex(cache_key, settings.SNAPSHOT_CACHE_TTL, json.dumps(res))
+    return res
