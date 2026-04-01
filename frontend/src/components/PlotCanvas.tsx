@@ -154,24 +154,30 @@ export default function PlotCanvas({
       }
     }
 
-    // Eigener Pfad
+    // Eigener Pfad (Segmentiert für Opacity-Trail)
     if (points.length >= 2) {
       ctx.save();
-      ctx.strokeStyle = "#111";
       ctx.lineWidth = 1.8;
       ctx.setLineDash([]);
 
-      ctx.beginPath();
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        
+        const px1 = ((p1.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
+        const py1 = (1 - (p1.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
+        const px2 = ((p2.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
+        const py2 = (1 - (p2.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
 
-      points.forEach((p, index) => {
-        const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-        const py = (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-
-        if (index === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-
-      ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(px1, py1);
+        ctx.lineTo(px2, py2);
+        
+        // Nutze die Opacity des Zielpunktes für das Segment
+        ctx.globalAlpha = p2.opacity ?? 1.0;
+        ctx.strokeStyle = p2.color ?? "#111";
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
@@ -204,23 +210,24 @@ export default function PlotCanvas({
 
       const isLast = i === points.length - 1;
       const isBest = i === bestIndex;
-      const radius = isLast ? 6 : i === 0 ? 3 : 4;
+      
+      // Nutze p.size wenn vorhanden, sonst Standardlogik
+      const radius = p.size ?? (isLast ? 6 : i === 0 ? 3 : 4);
 
+      ctx.save();
+      ctx.globalAlpha = p.opacity ?? 1.0;
       ctx.beginPath();
       ctx.arc(px, py, radius, 0, Math.PI * 2);
 
-      ctx.save();
-      ctx.fillStyle = isBest ? "green" : "#111";
+      ctx.fillStyle = isBest ? "green" : (p.color ?? "#111");
       ctx.fill();
-      ctx.restore();
 
       if (isLast) {
-        ctx.save();
         ctx.lineWidth = 2;
         ctx.strokeStyle = "black";
         ctx.stroke();
-        ctx.restore();
       }
+      ctx.restore();
     }
 
     // Label für letzten Punkt

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import Plot from "react-plotly.js";
 import type { Data, Layout } from "plotly.js";
 import { createGrid, getBenchmarkDefinition } from "../lib/benchmarkFunctions";
+import type { Point } from "../types";
 
 type OverlayPoint = {
   x: number;
@@ -48,10 +49,18 @@ export default function FunctionContourPlot({
       traces.push({
         type: "scatter",
         mode: "lines+markers",
-        x: points.map((p) => p.x),
-        y: points.map((p) => p.y),
-        marker: { size: 7, color: "black" },
-        line: { width: 2, color: "black" },
+        x: (points as Point[]).map((p) => p.x),
+        y: (points as Point[]).map((p) => p.y),
+        marker: { 
+          size: (points as Point[]).map((p) => p.size ?? 7), 
+          color: (points as Point[]).map((p) => p.color ?? "black"),
+          opacity: (points as Point[]).map((p) => p.opacity ?? 1.0)
+        },
+        line: { 
+          width: 2, 
+          color: "black",
+          shape: "spline" // Macht den Pfad etwas "runder" und organischer
+        },
         name: "Pfad",
       } as Data);
     }

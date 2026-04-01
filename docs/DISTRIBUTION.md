@@ -19,9 +19,11 @@ Provide these to students who will use the manual click interface:
 ## 🤖 For Student Bot Developers
 Provide these to students who will write optimization algorithms:
 - **Guide:** `docs/student_bot_guide.md`
-- **Library File:** `bot/blackbox_client.py` (The API client)
-- **Template File:** `bot/student_bot_template.py` (The starter code)
-- **API URL:** The backend URL (usually `http://SERVER-IP:8001`).
+- **Client:** `bot/blackbox_client.py` (Essential for RPN/Local Eval)
+- **Starter Template:** `bot/student_bot_template.py` (Simple RPN example)
+- **Advanced Template:** `bot/genetic_algorithm_template.py` (Full GA implementation)
+- **Dependencies:** `bot/requirements.txt`
+- **API URL:** The backend URL (usually `http://SERVER-IP:8000`).
 - **Session Code:** Provided by the teacher.
 
 ---

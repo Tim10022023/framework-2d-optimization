@@ -113,6 +113,7 @@ export default function App() {
   const [draftMaxSteps, setDraftMaxSteps] = useState<number>(30);
 
   const [points, setPoints] = useState<Point[]>([]);
+  const [totalClicks, setTotalClicks] = useState<number>(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [exportData, setExportData] = useState<ExportData | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -193,6 +194,7 @@ export default function App() {
   function resetForNewSession() {
     setParticipantId(null);
     setPoints([]);
+    setTotalClicks(0);
     setLeaderboard(null);
     setExportData(null);
     setRevealed(false);
@@ -219,6 +221,7 @@ export default function App() {
   function leaveSession() {
     setParticipantId(null);
     setPoints([]);
+    setTotalClicks(0);
     setSnapshot(null);
     setShowOnlyBots(false);
     setError(null);
@@ -314,6 +317,7 @@ export default function App() {
 
     try {
       const r = await evaluatePoint(code.trim(), participantId, x, y);
+      setTotalClicks(r.step);
       setPoints((prev) => {
         const exists = prev.some((p) => p.step === r.step);
         if (exists) return prev;
@@ -624,9 +628,11 @@ export default function App() {
           saveSessionCtx(null);
           setParticipantId(null);
           setPoints([]);
+          setTotalClicks(0);
           return;
         }
 
+        setTotalClicks(me.total_clicks);
         const restored = me.clicks.map((c) => ({
           x: c.x,
           y: c.y,
@@ -709,7 +715,7 @@ export default function App() {
             participantsCount={participantsCount}
             goal={selectedGoal}
             sessionStatus={sessionStatus}
-            stepsUsed={points.length}
+            stepsUsed={totalClicks}
             maxSteps={sessionMaxSteps}
           />
         )}
@@ -800,17 +806,30 @@ export default function App() {
                           ? snapshot.participants
                               .filter((p) => p.participant_id !== participantId)
                               .filter((p) => p.is_bot)
-                              .map((p) => ({
-                                name: p.name,
-                                isBot: p.is_bot,
-                                color: undefined,
-                                clicks: p.clicks.map((c) => ({
-                                  x: c.x,
-                                  y: c.y,
-                                  z: c.z,
-                                  step: c.step,
-                                })),
-                              }))
+                              .map((p) => {
+                                const trailLength = 40;
+                                const clicks = p.clicks;
+                                // Nur die letzten N Klicks zeigen für bessere Performance
+                                const startIdx = Math.max(0, clicks.length - trailLength);
+                                const sliced = clicks.slice(startIdx);
+                                
+                                return {
+                                  name: p.name,
+                                  isBot: p.is_bot,
+                                  color: undefined,
+                                  clicks: sliced.map((c, idx) => {
+                                    const dist = sliced.length - 1 - idx;
+                                    return {
+                                      x: c.x,
+                                      y: c.y,
+                                      z: c.z,
+                                      step: c.step,
+                                      // Bots in der Übersicht etwas dezenter faden
+                                      opacity: Math.max(0.1, 1.0 - (dist / trailLength) * 0.9)
+                                    };
+                                  }),
+                                };
+                              })
                           : []
                       }
                     />
@@ -819,6 +838,7 @@ export default function App() {
                   <div style={{ flex: 1, minWidth: 280 }}>
                     <StatsPanel
                       points={points}
+                      totalClicks={totalClicks}
                       targetZ={activeFunction?.target_z ?? 0}
                       tolerance={activeFunction?.tolerance ?? 0.01}
                     />

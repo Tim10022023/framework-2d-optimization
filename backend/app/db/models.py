@@ -27,6 +27,10 @@ class ParticipantModel(Base):
     found_step = Column(Integer, nullable=True)
     found_z = Column(Float, nullable=True)
     is_bot = Column(Boolean, nullable=False, default=False)
+    
+    # Track metrics on model level to avoid scanning millions of rows in 'clicks'
+    best_z = Column(Float, nullable=True)
+    total_clicks = Column(Integer, default=0, nullable=False)
 
     session_id = Column(Integer, ForeignKey("sessions.id"), index=True, nullable=False)
     session = relationship("SessionModel", back_populates="participants")

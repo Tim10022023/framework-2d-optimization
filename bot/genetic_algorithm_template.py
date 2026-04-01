@@ -9,15 +9,15 @@ from blackbox_client import BlackBoxClient
 
 # --- Konfiguration ---
 API_URL = "http://localhost:8000/"
-SESSION_CODE = "FFB378"  # Bitte durch aktuellen Code ersetzen
+SESSION_CODE = "BAC164"  # Bitte durch aktuellen Code ersetzen
 BOT_NAME = f"GA-Heavy-{random.randint(100, 999)}"
 
 # --- Heavy GA Parameter ---
-POPULATION_SIZE = 100
-GENERATIONS = 200 # Total 20,000 evaluations
+POPULATION_SIZE = 500
+GENERATIONS = 1000 # Total 500,000 evaluations
 MUTATION_RATE = 0.2
 CROSSOVER_RATE = 0.8
-ELITISM_COUNT = 5
+ELITISM_COUNT = 10
 
 class Individual:
     def __init__(self, x: float, y: float):
@@ -32,6 +32,7 @@ class GeneticAlgorithmBot:
     """
     Ein robuster evolutionärer Algorithmus.
     Lädt die Suchraum-Grenzen und das Ziel (min/max) automatisch vom Server.
+    Synchronisiert den Fortschritt in 20 gleich großen Teilen zum Server.
     """
     def __init__(self, api_url: str, session_code: str, bot_name: str):
         self.client = BlackBoxClient(api_url, session_code)
@@ -39,6 +40,7 @@ class GeneticAlgorithmBot:
         self.bounds = {"xmin": -5, "xmax": 5, "ymin": -5, "ymax": 5}
         self.goal = "min"
         self.full_trajectory = [] 
+        self.sync_interval = 1000 # Standard, wird überschrieben
 
     def run(self):
         # 1. Session beitreten & Suchraum-Parameter erhalten
@@ -53,6 +55,10 @@ class GeneticAlgorithmBot:
         print(f"Suchraum: x=[{self.bounds['xmin']}, {self.bounds['xmax']}], y=[{self.bounds['ymin']}, {self.bounds['ymax']}]")
         print(f"Session-Limit: {info.max_steps} Schritte")
         
+        # Berechnung des Sync-Intervalls (20 Teile)
+        self.sync_interval = max(1, info.max_steps // 20)
+        print(f"Synchronisations-Intervall: Alle {self.sync_interval} Evaluationen (1/20 der Session)")
+
         # 2. Startpopulation initialisieren
         population = self.init_population(POPULATION_SIZE)
         
@@ -60,25 +66,37 @@ class GeneticAlgorithmBot:
         self.mut_strength_x = (self.bounds["xmax"] - self.bounds["xmin"]) * 0.1
         self.mut_strength_y = (self.bounds["ymax"] - self.bounds["ymin"]) * 0.1
 
+        total_evals = 0
+        last_sync_at = 0
+
         for gen in range(GENERATIONS):
             # 3. Fitness evaluieren (Lokal!)
-            self.evaluate_population(population)
-            
+            for ind in population:
+                if ind.fitness is None:
+                    try:
+                        ind.fitness = self.client.evaluate_local(ind.x, ind.y)
+                        self.full_trajectory.append({"x": ind.x, "y": ind.y, "z": ind.fitness})
+                        total_evals += 1
+                    except Exception:
+                        ind.fitness = float('inf') if self.goal == "min" else float('-inf')
+
             # Bestes Individuum der Generation finden
             if self.goal == "min":
                 best = min(population, key=lambda ind: ind.fitness)
             else:
                 best = max(population, key=lambda ind: ind.fitness)
                 
-            print(f"Generation {gen:03d}: Best Fitness = {best.fitness:12.6f} at ({best.x:8.3f}, {best.y:8.3f})")
-            
-            # 4. Sync zum Server (alle 10 Generationen bei Heavy GA)
             if gen % 10 == 0:
+                print(f"Gen {gen:04d}: Best={best.fitness:12.6f} (Total Evals: {total_evals})")
+            
+            # 4. Sync zum Server (wenn Intervall erreicht)
+            if total_evals - last_sync_at >= self.sync_interval:
                 self.sync_progress()
+                last_sync_at = total_evals
 
             # Abbruchbedingungen prüfen
-            if len(self.full_trajectory) >= info.max_steps:
-                print("Maximales Schrittlimit erreicht!")
+            if total_evals >= info.max_steps:
+                print(f"Maximales Schrittlimit ({info.max_steps}) erreicht!")
                 break
 
             # 5. Neue Generation erzeugen
@@ -108,7 +126,7 @@ class GeneticAlgorithmBot:
 
         # Finaler Sync
         self.sync_progress()
-        print("Optimierung beendet.")
+        print(f"Optimierung beendet. Insgesamt {total_evals} Evaluationen.")
 
     def init_population(self, size: int) -> List[Individual]:
         pop = []
@@ -117,18 +135,6 @@ class GeneticAlgorithmBot:
             y = random.uniform(self.bounds["ymin"], self.bounds["ymax"])
             pop.append(Individual(x, y))
         return pop
-
-    def evaluate_population(self, population: List[Individual]):
-        for ind in population:
-            if ind.fitness is None:
-                # Lokale Evaluierung
-                try:
-                    ind.fitness = self.client.evaluate_local(ind.x, ind.y)
-                    # Merken für den Server
-                    self.full_trajectory.append({"x": ind.x, "y": ind.y, "z": ind.fitness})
-                except Exception as e:
-                    # Manchmal knallt math.sqrt oder math.log bei ungültigen Werten
-                    ind.fitness = float('inf') if self.goal == "min" else float('-inf')
 
     def selection_tournament(self, population: List[Individual], k=5) -> Individual:
         participants = random.sample(population, k)
@@ -165,10 +171,14 @@ class GeneticAlgorithmBot:
             return
         print(f"Syncing {len(self.full_trajectory)} Punkte zum Server...")
         try:
+            start_t = time.time()
             self.client.sync_trajectory(self.full_trajectory)
+            duration = time.time() - start_t
+            print(f"Sync erfolgreich ({duration:.2f}s)")
             self.full_trajectory = [] 
         except Exception as e:
             print(f"Sync fehlgeschlagen: {e}")
+
 
 def main():
     bot = GeneticAlgorithmBot(API_URL, SESSION_CODE, BOT_NAME)

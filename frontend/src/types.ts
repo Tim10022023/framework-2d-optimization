@@ -19,6 +19,9 @@ export type Point = {
   y: number;
   z: number;
   step: number;
+  opacity?: number;
+  size?: number;
+  color?: string;
 };
 
 export type LeaderboardRow = {
@@ -78,6 +81,7 @@ export type SnapshotParticipant = {
   found: boolean;
   found_step: number | null;
   clicks: SnapshotClick[];
+  total_clicks: number;
 };
 
 export type SessionSnapshot = {

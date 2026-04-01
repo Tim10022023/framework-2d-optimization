@@ -135,12 +135,12 @@ async def get_participants_count(code: str) -> int:
         return val
 
 async def get_session(code: str) -> Optional[Session]:
-    # Detailed session with all participants and clicks - not cached for now as it's large
+    # Detailed session with sampled clicks
     async with AsyncSessionLocal() as db:
-        # Use selectinload to avoid lazy loading issues in async
+        # Avoid selectinload for clicks as it might still be many points
         stmt = (
             select(SessionModel)
-            .options(selectinload(SessionModel.participants).selectinload(ParticipantModel.clicks))
+            .options(selectinload(SessionModel.participants))
             .where(SessionModel.code == code)
         )
         result = await db.execute(stmt)
@@ -151,9 +151,13 @@ async def get_session(code: str) -> Optional[Session]:
 
         participants = {}
         for p in db_session.participants:
+            # Load clicks separately and sorted - only the ones we actually stored!
+            click_stmt = select(ClickModel).where(ClickModel.participant_id == p.id).order_by(ClickModel.step)
+            clicks_db = (await db.execute(click_stmt)).scalars().all()
+            
             clicks = [
                 Click(x=c.x, y=c.y, z=c.z)
-                for c in sorted(p.clicks, key=lambda click: click.step)
+                for c in clicks_db
             ]
 
             participants[p.participant_code] = Participant(
@@ -326,16 +330,13 @@ async def add_click(code: str, participant_id: str, x: float, y: float, z: float
         if not db_participant:
             raise KeyError("participant not found")
 
-        # 3. Step Count
-        count_stmt = select(func.count(ClickModel.id)).where(ClickModel.participant_id == db_participant.id)
-        result = await db.execute(count_stmt)
-        step_count = result.scalar() or 0
-        
-        if step_count >= db_session.max_steps:
+        # 3. Step Count & Limits
+        if db_participant.total_clicks >= db_session.max_steps:
             raise ValueError("max steps reached")
-        step = step_count + 1
+        
+        step = db_participant.total_clicks + 1
 
-        # 4. Add Click
+        # 4. Add Click (Always store single clicks)
         db_click = ClickModel(
             x=x,
             y=y,
@@ -344,32 +345,31 @@ async def add_click(code: str, participant_id: str, x: float, y: float, z: float
             participant_id=db_participant.id,
         )
         db.add(db_click)
-        await db.commit()
-        await db.refresh(db_click)
-
-        # 5. Best Z
-        z_agg = func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
-        best_z_stmt = select(z_agg).where(ClickModel.participant_id == db_participant.id)
-        result = await db.execute(best_z_stmt)
-        best_z = result.scalar()
+        
+        # 5. Update Participant Metrics
+        db_participant.total_clicks = step
+        if db_participant.best_z is None:
+            db_participant.best_z = z
+        else:
+            if db_session.goal == "min":
+                db_participant.best_z = min(db_participant.best_z, z)
+            else:
+                db_participant.best_z = max(db_participant.best_z, z)
 
         spec = get_spec(db_session.function_id)
         found_now = False
 
         if db_participant.found_step is None:
-            if db_session.goal == "min" and best_z <= spec.target_z + spec.tolerance:
+            if db_session.goal == "min" and db_participant.best_z <= spec.target_z + spec.tolerance:
                 db_participant.found_step = step
-                db_participant.found_z = best_z
+                db_participant.found_z = db_participant.best_z
+                found_now = True
+            elif db_session.goal == "max" and db_participant.best_z >= spec.target_z - spec.tolerance:
+                db_participant.found_step = step
+                db_participant.found_z = db_participant.best_z
                 found_now = True
 
-            elif db_session.goal == "max" and best_z >= spec.target_z - spec.tolerance:
-                db_participant.found_step = step
-                db_participant.found_z = best_z
-                found_now = True
-
-            if found_now:
-                await db.commit()
-                await db.refresh(db_participant)
+        await db.commit()
 
         # Invalidate leaderboard and snapshot cache
         redis = get_redis()
@@ -379,7 +379,7 @@ async def add_click(code: str, participant_id: str, x: float, y: float, z: float
 
         return {
             "step": step,
-            "best_z": best_z,
+            "best_z": db_participant.best_z,
             "found": db_participant.found_step is not None,
             "found_step": db_participant.found_step,
             "found_now": found_now,
@@ -408,72 +408,81 @@ async def add_trajectory(code: str, participant_id: str, points: list[dict]) -> 
         if not db_participant:
             raise KeyError("participant not found")
 
-        # 3. Anti-Cheat Verification
-        # Sample up to 5 points to verify
-        sample_size = min(len(points), 5)
-        samples = random.sample(points, sample_size)
+        # 3. Anti-Cheat Verification (Sample 5 points)
+        sample_size_verify = min(len(points), 5)
+        verify_samples = random.sample(points, sample_size_verify)
         spec = get_spec(db_session.function_id)
-
-        for p in samples:
+        for p in verify_samples:
             true_z = evaluate_function(db_session.function_id, p["x"], p["y"])
-            if abs(p["z"] - true_z) > 1e-4:  # Small epsilon for float comparison
+            if abs(p["z"] - true_z) > 1e-4:
                 raise ValueError(f"Anti-cheat verification failed for point ({p['x']}, {p['y']})")
 
         # 4. Step Management
-        count_stmt = select(func.count(ClickModel.id)).where(ClickModel.participant_id == db_participant.id)
-        result = await db.execute(count_stmt)
-        current_steps = result.scalar() or 0
-        
-        if current_steps + len(points) > db_session.max_steps:
+        start_step = db_participant.total_clicks
+        if start_step + len(points) > db_session.max_steps:
             raise ValueError("Trajectory would exceed max steps limit")
 
-        # 5. Bulk Insert
-        new_clicks = []
-        best_z = None
-        found_now = False
-        found_step = db_participant.found_step
-
+        # 5. Sampling (Root of performance fix)
+        # We only want to store a few points in the DB for visualization, 
+        # but the bot counts all of them for total_clicks.
+        MAX_POINTS_TO_STORE_PER_BATCH = 50
+        stride = max(1, len(points) // MAX_POINTS_TO_STORE_PER_BATCH)
+        
+        best_point_in_batch = None
+        new_clicks_to_db = []
+        
         for i, p in enumerate(points):
-            step = current_steps + i + 1
-            new_clicks.append({
-                "x": p["x"],
-                "y": p["y"],
-                "z": p["z"],
-                "step": step,
-                "participant_id": db_participant.id
-            })
-
-            # Track best Z in this batch
-            if best_z is None:
-                best_z = p["z"]
+            current_abs_step = start_step + i + 1
+            
+            # Track best point globally for the participant
+            is_new_best = False
+            if db_participant.best_z is None:
+                db_participant.best_z = p["z"]
+                is_new_best = True
             else:
-                if db_session.goal == "min":
-                    best_z = min(best_z, p["z"])
-                else:
-                    best_z = max(best_z, p["z"])
+                if db_session.goal == "min" and p["z"] < db_participant.best_z:
+                    db_participant.best_z = p["z"]
+                    is_new_best = True
+                elif db_session.goal == "max" and p["z"] > db_participant.best_z:
+                    db_participant.best_z = p["z"]
+                    is_new_best = True
 
-            # Check if found
-            if found_step is None:
+            # Track if this point found the goal
+            found_now = False
+            if db_participant.found_step is None:
                 if db_session.goal == "min" and p["z"] <= spec.target_z + spec.tolerance:
-                    found_step = step
-                    db_participant.found_step = step
+                    db_participant.found_step = current_abs_step
                     db_participant.found_z = p["z"]
                     found_now = True
                 elif db_session.goal == "max" and p["z"] >= spec.target_z - spec.tolerance:
-                    found_step = step
-                    db_participant.found_step = step
+                    db_participant.found_step = current_abs_step
                     db_participant.found_z = p["z"]
                     found_now = True
 
-        # Perform bulk insert
-        if new_clicks:
-            await db.execute(insert(ClickModel), new_clicks)
+            # Decision: Should we store this point in the DB for the plot?
+            # 1. Take every N-th point (stride)
+            # 2. Or if it is the best point of the batch
+            # 3. Or if it is the very last point
+            should_store = (i % stride == 0) or (i == len(points) - 1) or is_new_best
+            
+            if should_store:
+                new_clicks_to_db.append({
+                    "x": p["x"],
+                    "y": p["y"],
+                    "z": p["z"],
+                    "step": current_abs_step,
+                    "participant_id": db_participant.id
+                })
+
+        # 6. Finalize
+        db_participant.total_clicks = start_step + len(points)
         
-        if found_now:
-            await db.commit()
-            await db.refresh(db_participant)
-        else:
-            await db.commit()
+        if new_clicks_to_db:
+            # Sort to ensure order and avoid duplicates in the same step
+            unique_clicks = {c["step"]: c for c in new_clicks_to_db}.values()
+            await db.execute(insert(ClickModel), list(unique_clicks))
+        
+        await db.commit()
 
         # Invalidate caches
         redis = get_redis()
@@ -483,11 +492,10 @@ async def add_trajectory(code: str, participant_id: str, points: list[dict]) -> 
 
         return {
             "batch_size": len(points),
-            "total_steps": current_steps + len(points),
-            "best_z": best_z,
+            "total_steps": db_participant.total_clicks,
+            "best_z": db_participant.best_z,
             "found": db_participant.found_step is not None,
             "found_step": db_participant.found_step,
-            "found_now": found_now,
         }
 
 
@@ -506,27 +514,19 @@ async def compute_leaderboard(code: str) -> list[dict]:
         if not db_session:
             raise KeyError("session not found")
 
-        # Get participants
+        # Get participants - use the metrics stored on the participant model!
         part_stmt = select(ParticipantModel).where(ParticipantModel.session_id == db_session.id)
         result = await db.execute(part_stmt)
         participants = result.scalars().all()
         
         rows: list[dict] = []
         for p in participants:
-            z_agg = func.min(ClickModel.z) if db_session.goal == "min" else func.max(ClickModel.z)
-            res_stmt = select(func.count(ClickModel.id), z_agg).where(ClickModel.participant_id == p.id)
-            res_result = await db.execute(res_stmt)
-            res = res_result.first()
-            
-            steps = res[0] or 0
-            best_z = res[1]
-
             rows.append({
                 "participant_id": p.participant_code,
                 "name": p.name,
                 "is_bot": getattr(p, "is_bot", False),
-                "steps": steps,
-                "best_z": best_z,
+                "steps": p.total_clicks,
+                "best_z": p.best_z,
                 "found": p.found_step is not None,
                 "found_step": p.found_step,
             })
@@ -565,7 +565,6 @@ async def set_session_status(code: str, status: str) -> Session:
     async with AsyncSessionLocal() as db:
         stmt = (
             select(SessionModel)
-            .options(selectinload(SessionModel.participants).selectinload(ParticipantModel.clicks))
             .where(SessionModel.code == code)
         )
         result = await db.execute(stmt)
@@ -576,30 +575,6 @@ async def set_session_status(code: str, status: str) -> Session:
 
         db_session.status = status
         await db.commit()
-        await db.refresh(db_session)
-
-        participants = {}
-        for p in db_session.participants:
-            clicks = [
-                Click(x=c.x, y=c.y, z=c.z)
-                for c in sorted(p.clicks, key=lambda click: click.step)
-            ]
-
-            participants[p.participant_code] = Participant(
-                id=p.participant_code,
-                name=p.name,
-                clicks=clicks,
-                is_bot=getattr(p, "is_bot", False),
-                found_step=p.found_step,
-                found_z=p.found_z,
-            )
-
-        return Session(
-            code=db_session.code,
-            function_id=db_session.function_id,
-            goal=db_session.goal,
-            admin_token=db_session.admin_token,
-            status=db_session.status,
-            participants=participants,
-            max_steps=db_session.max_steps
-        )
+        
+        # Reuse optimized get_session to return updated state
+        return await get_session(code)

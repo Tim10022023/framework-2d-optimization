@@ -1,67 +1,48 @@
-# Student Bot Guide
+# Student Bot Guide (Phase 2 - Scalable Optimization)
 
-Diese Kurzanleitung erklärt, wie ein eigener lokaler Python-Bot gegen das Framework **2D Optimization** ausgeführt werden kann.
+Diese Anleitung erklärt, wie du einen leistungsstarken Python-Bot entwickelst, der bis zu **500.000 Evaluationen** pro Session durchführen kann.
 
 ## Was bereitgestellt werden muss
 
 Für Studierende sollten mindestens diese Dateien bereitgestellt werden:
 
-- `bot/student_bot_template.py`
-- `bot/blackbox_client.py`
-
-Zusätzlich werden benötigt:
-
-- die **Backend-API-URL**
-- ein **Session-Code**
-- lokal installiertes **Python**
-- das Paket **requests**
-
-Optional sinnvoll:
-- `bot/requirements.txt`
+- `bot/blackbox_client.py` (Der API-Client mit RPN-Support)
+- `bot/student_bot_template.py` (Einfaches Beispiel für RPN-Nutzung)
+- `bot/genetic_algorithm_template.py` (Fortgeschrittenes Beispiel: Genetischer Algorithmus)
+- `bot/requirements.txt` (Abhängigkeiten)
 
 ## Installation
 
 ```powershell
-pip install requests
+pip install -r bot/requirements.txt
 ```
 
-## Zweck
+## Funktionsweise (Phase 2)
 
-Der Student-Bot arbeitet gegen die **öffentliche Blackbox-Schnittstelle** einer laufenden Session.  
-Er kennt die interne Zielfunktion nicht, sondern nutzt nur Join und Evaluate.
+Im Gegensatz zur einfachen Phase 1 (einzelne HTTP-Requests pro Punkt) nutzt Phase 2 ein **Hybrid-Modell**:
 
-## Vorbereitung
+1.  **Join:** Dein Bot tritt der Session bei.
+2.  **Bytecode-Download:** Der Bot erhält eine verschleierte mathematische Formel (RPN-Bytecode).
+3.  **Lokale Evaluation:** Mit `client.evaluate_local(x, y)` berechnet dein Bot den Funktionswert `z` direkt auf deinem Computer (extrem schnell, kein Netzwerk-Delay).
+4.  **Batch-Sync:** Dein Bot sammelt seine Suchschritte (Trajektorie) und schickt sie in Paketen (z. B. alle 25.000 Schritte) mit `client.sync_trajectory(points)` an den Server.
 
-Voraussetzung:
+## Strategien
 
-- es gibt bereits eine laufende Session
-- der Status ist `running`
+Dank der lokalen Evaluation sind nun komplexe Algorithmen möglich:
 
-Im Bot-Template trägst du typischerweise ein:
+- **Genetische Algorithmen (GA):** Populationen, Selektion, Mutation und Crossover.
+- **Partikelschwarmoptimierung (PSO):** Schwärme, die den besten Punkt suchen.
+- **Differential Evolution:** Fortgeschrittene evolutionäre Suche.
 
-- API-URL
-- Session-Code
-- Bot-/Teilnehmername
+## Wichtige API-Funktionen (`blackbox_client.py`)
 
-## Start
+- `client.join_session(name, is_bot=True)`: Tritt bei und lädt automatisch den Bytecode.
+- `client.evaluate_local(x, y)`: Berechnet `z` sofort lokal.
+- `client.sync_trajectory(points)`: Synchronisiert eine Liste von `(x, y, z, step)`-Tupeln mit dem Server.
+- `client.get_best_so_far()`: Gibt den bisher besten gefundenen Punkt deines Bots zurück.
 
-```powershell
-python bot\student_bot_template.py
-```
+## Performance-Tipp
 
-## Was der Bot macht
+Das Backend speichert serverseitig nur eine repräsentative Stichprobe deiner Trajektorie (Downsampling), um die Datenbank zu schonen. Dein gesamter Fortschritt (Klick-Counter und Bestwert) wird jedoch exakt getrackt.
 
-Der Bot joint der Session und sendet Punkte `(x, y)` an die öffentliche Evaluierungsschnittstelle.  
-Als Antwort erhält er die jeweiligen Funktionswerte zurück.
-
-Die Suchstrategie implementierst du selbst, z. B.:
-
-- Random Search
-- lokales Suchen um gute Punkte
-- einfache Hill-Climbing-Strategien
-
-## Wichtige Hinweise
-
-- der Bot soll nur die **Blackbox-Schnittstelle** nutzen
-- nach Session-Ende sind normale Evaluierungen nicht mehr möglich
-- zu aggressive Request-Frequenz kann das System bei vielen parallelen Bots belasten
+**Viel Erfolg bei der Suche nach dem globalen Minimum!**
