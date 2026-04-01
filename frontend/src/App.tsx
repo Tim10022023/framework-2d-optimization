@@ -87,6 +87,7 @@ export default function App() {
   );
 
   const [inspectPid, setInspectPid] = useState<string>("");
+  const [hoveredPid, setHoveredPid] = useState<string | null>(null);
   const [teacherSnapshot, setTeacherSnapshot] =
     useState<SessionSnapshot | null>(null);
 
@@ -887,6 +888,8 @@ export default function App() {
             <LeaderboardPanel
               leaderboard={leaderboard}
               onSelectParticipant={setInspectPid}
+              onHover={setHoveredPid}
+              hoveredPid={hoveredPid}
             />
           </div>
 

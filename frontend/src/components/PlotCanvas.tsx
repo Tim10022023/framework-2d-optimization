@@ -18,6 +18,7 @@ type PlotCanvasProps = {
     clicks: { x: number; y: number; step: number; z?: number }[];
   }[];
   onEvaluate: (x: number, y: number) => Promise<void>;
+  hoveredPid?: string | null;
 };
 
 function getStableColor(name: string): string {
@@ -52,12 +53,27 @@ export default function PlotCanvas({
   goal,
   extraParticipants,
   onEvaluate,
+  hoveredPid = null,
 }: PlotCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [pulseScale, setPulseScale] = useState(1);
   const [hoverCoords, setHoverCoords] = useState<{
     x: number;
     y: number;
   } | null>(null);
+
+  // Animation loop for pulsing best point
+  useEffect(() => {
+    let frameId: number;
+    const start = performance.now();
+    const animate = (time: number) => {
+      const elapsed = time - start;
+      setPulseScale(1 + Math.sin(elapsed / 300) * 0.2);
+      frameId = requestAnimationFrame(animate);
+    };
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
+  }, []);
 
   function canvasPixelToCoords(
     xPix: number,
@@ -81,28 +97,22 @@ export default function PlotCanvas({
     const h = c.height;
 
     ctx.clearRect(0, 0, w, h);
-    const zeroX = ((0 - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-    const zeroY = (1 - (0 - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
+    
+    // Helpers for mapping
+    const toX = (val: number) => ((val - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
+    const toY = (val: number) => (1 - (val - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
+
+    const zeroX = toX(0);
+    const zeroY = toY(0);
 
     // Achsen
     ctx.save();
     ctx.strokeStyle = "#555";
     ctx.lineWidth = 1;
-
     ctx.beginPath();
-    ctx.moveTo(0, zeroY);
-    ctx.lineTo(w, zeroY);
-    ctx.moveTo(zeroX, 0);
-    ctx.lineTo(zeroX, h);
+    ctx.moveTo(0, zeroY); ctx.lineTo(w, zeroY);
+    ctx.moveTo(zeroX, 0); ctx.lineTo(zeroX, h);
     ctx.stroke();
-    ctx.restore();
-
-    // Mini-Achsenlabels
-    ctx.save();
-    ctx.fillStyle = "#bbb";
-    ctx.font = "12px system-ui, sans-serif";
-    ctx.fillText("x", w - 14, Math.max(14, zeroY - 6));
-    ctx.fillText("y", Math.min(w - 12, zeroX + 6), 14);
     ctx.restore();
 
     // Extra-Pfade (z.B. Bots)
@@ -110,70 +120,49 @@ export default function PlotCanvas({
       for (const ep of extraParticipants) {
         if (!ep.clicks || ep.clicks.length === 0) continue;
 
+        // Wir brauchen hier eigentlich die participant_id zum Vergleichen.
+        // Da wir sie im Prop extraParticipants nicht haben, nutzen wir den Namen als Proxy.
+        const isHovered = hoveredPid === ep.name || (ep as any).participant_id === hoveredPid;
         const color = ep.color ?? getStableColor(ep.name);
 
         ctx.save();
-        ctx.globalAlpha = 0.75;
+        ctx.globalAlpha = isHovered ? 1.0 : 0.6;
         ctx.strokeStyle = color;
         ctx.fillStyle = color;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = isHovered ? 3 : 1.5;
 
-        if (ep.isBot) {
-          ctx.setLineDash([5, 4]);
-        } else {
-          ctx.setLineDash([]);
-        }
+        if (ep.isBot) ctx.setLineDash([5, 4]);
 
         if (ep.clicks.length >= 2) {
           ctx.beginPath();
-
           ep.clicks.forEach((p, idx) => {
-            const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-            const py =
-              (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-
-            if (idx === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
+            if (idx === 0) ctx.moveTo(toX(p.x), toY(p.y));
+            else ctx.lineTo(toX(p.x), toY(p.y));
           });
-
           ctx.stroke();
         }
 
         ep.clicks.forEach((p, idx) => {
-          const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-          const py =
-            (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-
           ctx.beginPath();
-          const radius = idx === ep.clicks.length - 1 ? 4 : 2.5;
-          ctx.arc(px, py, radius, 0, Math.PI * 2);
+          const isLast = idx === ep.clicks.length - 1;
+          const radius = isLast ? (isHovered ? 6 : 4) : 2.5;
+          ctx.arc(toX(p.x), toY(p.y), radius, 0, Math.PI * 2);
           ctx.fill();
         });
-
         ctx.restore();
       }
     }
 
-    // Eigener Pfad (Segmentiert für Opacity-Trail)
+    // Eigener Pfad
     if (points.length >= 2) {
       ctx.save();
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([]);
-
+      ctx.lineWidth = 2.0;
       for (let i = 0; i < points.length - 1; i++) {
         const p1 = points[i];
         const p2 = points[i + 1];
-        
-        const px1 = ((p1.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-        const py1 = (1 - (p1.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-        const px2 = ((p2.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-        const py2 = (1 - (p2.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-
         ctx.beginPath();
-        ctx.moveTo(px1, py1);
-        ctx.lineTo(px2, py2);
-        
-        // Nutze die Opacity des Zielpunktes für das Segment
+        ctx.moveTo(toX(p1.x), toY(p1.y));
+        ctx.lineTo(toX(p2.x), toY(p2.y));
         ctx.globalAlpha = p2.opacity ?? 1.0;
         ctx.strokeStyle = p2.color ?? "#111";
         ctx.stroke();
@@ -181,68 +170,61 @@ export default function PlotCanvas({
       ctx.restore();
     }
 
-    // Bester Punkt (min/max z)
-    let bestIndex = -1;
-    if (points.length > 0) {
-      let bestZ = points[0].z;
-      bestIndex = 0;
+    // Bester Punkt (min/max z) - Global
+    const allPoints = [
+      ...points.map(p => ({...p, owner: 'me'})),
+      ... (extraParticipants ?? []).flatMap(ep => ep.clicks.map(c => ({...c, owner: ep.name})))
+    ];
 
-      for (let i = 1; i < points.length; i++) {
-        if (goal === "min") {
-          if (points[i].z < bestZ) {
-            bestZ = points[i].z;
-            bestIndex = i;
-          }
-        } else {
-          if (points[i].z > bestZ) {
-            bestZ = points[i].z;
-            bestIndex = i;
-          }
-        }
-      }
+    let bestPoint = null;
+    if (allPoints.length > 0) {
+      bestPoint = allPoints.reduce((prev, curr) => {
+        if (curr.z === undefined) return prev;
+        if (prev.z === undefined) return curr;
+        if (goal === "min") return curr.z < prev.z ? curr : prev;
+        return curr.z > prev.z ? curr : prev;
+      });
     }
 
     // Eigene Punkte
-    for (let i = 0; i < points.length; i++) {
-      const p = points[i];
-      const px = ((p.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-      const py = (1 - (p.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-
+    points.forEach((p, i) => {
       const isLast = i === points.length - 1;
-      const isBest = i === bestIndex;
-      
-      // Nutze p.size wenn vorhanden, sonst Standardlogik
-      const radius = p.size ?? (isLast ? 6 : i === 0 ? 3 : 4);
-
+      const radius = p.size ?? (isLast ? 6 : 4);
       ctx.save();
       ctx.globalAlpha = p.opacity ?? 1.0;
       ctx.beginPath();
-      ctx.arc(px, py, radius, 0, Math.PI * 2);
-
-      ctx.fillStyle = isBest ? "green" : (p.color ?? "#111");
+      ctx.arc(toX(p.x), toY(p.y), radius, 0, Math.PI * 2);
+      ctx.fillStyle = p.color ?? "#111";
       ctx.fill();
-
       if (isLast) {
         ctx.lineWidth = 2;
-        ctx.strokeStyle = "black";
+        ctx.strokeStyle = "white";
         ctx.stroke();
       }
       ctx.restore();
-    }
+    });
 
-    // Label für letzten Punkt
-    if (points.length > 0) {
-      const last = points[points.length - 1];
-      const px = ((last.x - bounds.xmin) / (bounds.xmax - bounds.xmin)) * w;
-      const py = (1 - (last.y - bounds.ymin) / (bounds.ymax - bounds.ymin)) * h;
-
+    // Pulse für Besten Punkt
+    if (bestPoint && bestPoint.z !== undefined) {
+      const bx = toX(bestPoint.x);
+      const by = toY(bestPoint.y);
       ctx.save();
-      ctx.fillStyle = "#111";
-      ctx.font = "12px system-ui, sans-serif";
-      ctx.fillText(`#${last.step}`, px + 8, py - 8);
+      ctx.beginPath();
+      ctx.arc(bx, by, 10 * pulseScale, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255, 215, 0, 0.4)";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      ctx.beginPath();
+      ctx.arc(bx, by, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffd700";
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = "#ffd700";
+      ctx.fill();
       ctx.restore();
     }
-  }, [points, bounds, extraParticipants]);
+
+  }, [points, bounds, extraParticipants, pulseScale, goal, hoveredPid]);
 
   async function onCanvasClick(ev: React.MouseEvent<HTMLCanvasElement>) {
     if (sessionStatus === "ended" || disableClick) return;

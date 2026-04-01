@@ -9,7 +9,7 @@ from blackbox_client import BlackBoxClient
 
 # --- Konfiguration ---
 API_URL = "http://localhost:8000/"
-SESSION_CODE = "BAC164"  # Bitte durch aktuellen Code ersetzen
+SESSION_CODE = "9989DB"  # Bitte durch aktuellen Code ersetzen
 BOT_NAME = f"GA-Heavy-{random.randint(100, 999)}"
 
 # --- Heavy GA Parameter ---
