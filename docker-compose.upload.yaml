@@ -39,7 +39,6 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS}
-      VITE_TEACHER_PIN: ${VITE_TEACHER_PIN}
     volumes:
       - opt2d_backend_data:/app/backend/data
       - opt2d_backend_static:/app/backend/app/static
