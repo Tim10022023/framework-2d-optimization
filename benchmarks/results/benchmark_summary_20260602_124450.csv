@@ -1,0 +1,2 @@
+url,bots,points,runs,warmup,session_code,function,output_dir,seed,verbose,avg_points_per_second,total_points_all_runs,total_errors_all_runs,latency_ms
+http://localhost:8000,1,1,1,0,,sphere_shifted,benchmarks/results,42,False,32.412284255693784,1,0,"{'mean': 12.739000001602108, 'median': 12.739000001602108, 'min': 12.739000001602108, 'max': 12.739000001602108, 'std_dev': 0, 'p95': None}"

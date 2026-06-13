@@ -16,6 +16,7 @@
 ### 1.2 Problemstellung und Zielsetzung
 * Defizite herkömmlicher Lehrmethoden.
 * Anforderungskatalog an ein interaktives Framework.
+* Formulierung der Hypothese: Ein interaktives Black-Box-Framework vereinfacht das Verständnis und die Intuition für abstrakte Optimierungsalgorithmen.
 
 ### 1.3 Aufbau der Arbeit
 
@@ -86,7 +87,9 @@
 * Performance im Live-Betrieb
 
 ### 6.2 Pädagogische Evaluation und Reflexion
-* Einsatz in der Vorlesung: Beobachtungen zum Lernverhalten.
+* Methodik: Konzeption und Durchführung einer Studenten-Umfrage im Rahmen der Vorlesung.
+* Auswertung des Feedbacks und Reflexion eigener Beobachtungen zum Lernverhalten.
+* Validierung der aufgestellten Hypothese anhand der Evaluationsergebnisse.
 * Analyse des Usability-Feedbacks.
 
 ### 6.3 Code-Qualität und Maintenance
@@ -95,6 +98,7 @@
 ## 7. Zusammenfassung und Ausblick
 
 ### 7.1 Zusammenfassung der Ergebnisse
+* Beantwortung der Problemstellung und abschließendes Fazit zur Hypothese.
 
 ### 7.2 Kritische Reflexion
 

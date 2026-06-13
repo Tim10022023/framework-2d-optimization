@@ -9,7 +9,7 @@ from blackbox_client import BlackBoxClient
 
 # --- Konfiguration ---
 API_URL = "http://localhost:8000/"
-SESSION_CODE = "91198B"  # Bitte durch aktuellen Code ersetzen
+SESSION_CODE = "F36182"  # Bitte durch aktuellen Code ersetzen
 BOT_NAME = f"Bot-Student-{random.randint(100, 999)}"
 
 

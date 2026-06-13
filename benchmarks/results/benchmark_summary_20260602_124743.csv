@@ -1,0 +1,2 @@
+url,bots,evals_per_bot,batch_size,runs,warmup,session_code,function,output_dir,seed,verbose,avg_evals_per_second,total_evals_all_runs,total_sync_requests_all_runs,total_errors_all_runs,sync_latency_ms
+http://localhost:8000,50,10000,1000,3,100,,sphere_shifted,benchmarks/results,42,False,105812.28707736875,1500000,1500,0,"{'mean': 439.93916679999893, 'median': 404.0015000000494, 'min': 23.702599999523954, 'max': 1785.1062000008824, 'std_dev': 243.27153796510285, 'p95': 869.601865000277}"

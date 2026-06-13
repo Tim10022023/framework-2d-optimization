@@ -1,0 +1,69 @@
+{
+  "benchmark": "rpn_eval_speed",
+  "parameters": {
+    "url": "http://localhost:8000",
+    "points": 1000,
+    "runs": 2,
+    "warmup": 0,
+    "session_code": null,
+    "function": "sphere_shifted",
+    "output_dir": "benchmarks/results",
+    "seed": 42,
+    "verbose": false
+  },
+  "environment": {
+    "python_version": "3.14.3",
+    "os": "Windows",
+    "os_release": "11",
+    "cpu_count": 16,
+    "timestamp": "2026-06-02T12:56:45.957571",
+    "git_hash": "59bc58fefec77f40806eb94224c2821ae2504ba4"
+  },
+  "payload_info": {
+    "rpn_payload_length": 15,
+    "function_id": "sphere_shifted"
+  },
+  "runs": [
+    {
+      "run_index": 0,
+      "duration_s": 0.001003100000161794,
+      "total_evals": 1000,
+      "evals_per_second": 996909.5801402711,
+      "eval_latency_ms": {
+        "mean": 0.0007769999992888188,
+        "median": 0.0006999998731771484,
+        "min": 0.0005999991117278114,
+        "max": 0.008400000297115184,
+        "std_dev": 0.00034875870332030034,
+        "p95": 0.0008999995770864189
+      }
+    },
+    {
+      "run_index": 1,
+      "duration_s": 0.0010963999993691687,
+      "total_evals": 1000,
+      "evals_per_second": 912075.8852383856,
+      "eval_latency_ms": {
+        "mean": 0.0008476999937556684,
+        "median": 0.000700001692166552,
+        "min": 0.0005999991117278114,
+        "max": 0.04789999911736231,
+        "std_dev": 0.0015514127480674364,
+        "p95": 0.0009000013960758224
+      }
+    }
+  ],
+  "summary": {
+    "avg_duration_s": 0.0010497499997654813,
+    "avg_evals_per_second": 954492.7326893284,
+    "total_evals_all_runs": 2000,
+    "latency_ms": {
+      "mean": 0.0008123499965222436,
+      "median": 0.0006999998731771484,
+      "min": 0.0005999991117278114,
+      "max": 0.04789999911736231,
+      "std_dev": 0.001124666562440905,
+      "p95": 0.0008999995770864189
+    }
+  }
+}
