@@ -1,0 +1,80 @@
+{
+  "benchmark": "batch_sync_scaling",
+  "parameters": {
+    "url": "http://localhost:8000",
+    "bots": 2,
+    "evals_per_bot": 100,
+    "batch_size": 50,
+    "runs": 2,
+    "warmup": 0,
+    "session_code": null,
+    "function": "sphere_shifted",
+    "output_dir": "benchmarks/results",
+    "seed": 42,
+    "verbose": false
+  },
+  "environment": {
+    "python_version": "3.14.3",
+    "os": "Windows",
+    "os_release": "11",
+    "cpu_count": 16,
+    "timestamp": "2026-06-02T12:56:50.037258",
+    "git_hash": "59bc58fefec77f40806eb94224c2821ae2504ba4"
+  },
+  "session_code": "A3A889",
+  "runs": [
+    {
+      "run_index": 0,
+      "duration_s": 0.05548170000110986,
+      "total_evals": 200,
+      "total_sync_requests": 4,
+      "total_errors": 0,
+      "evals_per_second": 3604.7922106928804,
+      "syncs_per_second": 72.09584421385762,
+      "sync_latency_ms": {
+        "mean": 16.856749999988097,
+        "median": 17.000049999296607,
+        "min": 16.25180000155524,
+        "max": 17.175099999803933,
+        "std_dev": 0.4280611824866242,
+        "p95": null
+      },
+      "best_z": 0.09928640880312782
+    },
+    {
+      "run_index": 1,
+      "duration_s": 0.051797699999951874,
+      "total_evals": 200,
+      "total_sync_requests": 4,
+      "total_errors": 0,
+      "evals_per_second": 3861.1753031541134,
+      "syncs_per_second": 77.22350606308227,
+      "sync_latency_ms": {
+        "mean": 17.581800000243675,
+        "median": 17.66790000056062,
+        "min": 16.855599998962134,
+        "max": 18.135800000891322,
+        "std_dev": 0.5402625727274396,
+        "p95": null
+      },
+      "best_z": 0.024720671503566785
+    }
+  ],
+  "summary": {
+    "avg_duration_s": 0.053639700000530866,
+    "avg_evals_per_second": 3732.983756923497,
+    "total_evals_all_runs": 400,
+    "total_sync_requests_all_runs": 8,
+    "request_reduction_vs_individual_percent": 98.0,
+    "total_errors_all_runs": 0,
+    "error_rate": 0.0,
+    "sync_latency_ms": {
+      "mean": 17.219275000115886,
+      "median": 17.159449999780918,
+      "min": 16.25180000155524,
+      "max": 18.135800000891322,
+      "std_dev": 0.5948295165203682,
+      "p95": null
+    }
+  }
+}

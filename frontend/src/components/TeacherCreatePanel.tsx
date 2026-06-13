@@ -141,7 +141,7 @@ export default function TeacherCreatePanel({
                 type="number"
                 value={maxSteps}
                 min={1}
-                max={1000}
+                max={500000}
                 onChange={(e) => onChangeMaxSteps(Number(e.target.value))}
                 style={{ display: "block", width: "100%", marginTop: 4 }}
               />

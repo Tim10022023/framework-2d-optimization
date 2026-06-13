@@ -1,0 +1,98 @@
+{
+  "benchmark": "batch_sync_scaling",
+  "parameters": {
+    "url": "http://localhost:8000",
+    "bots": 50,
+    "evals_per_bot": 10000,
+    "batch_size": 1000,
+    "runs": 3,
+    "warmup": 100,
+    "session_code": null,
+    "function": "sphere_shifted",
+    "output_dir": "benchmarks/results",
+    "seed": 42,
+    "verbose": false
+  },
+  "environment": {
+    "python_version": "3.14.3",
+    "os": "Windows",
+    "os_release": "11",
+    "cpu_count": 16,
+    "timestamp": "2026-06-02T13:01:04.288806",
+    "git_hash": "59bc58fefec77f40806eb94224c2821ae2504ba4"
+  },
+  "session_code": "F4F840",
+  "runs": [
+    {
+      "run_index": 0,
+      "duration_s": 4.452498299999206,
+      "total_evals": 500000,
+      "total_sync_requests": 500,
+      "total_errors": 0,
+      "evals_per_second": 112296.50553714734,
+      "syncs_per_second": 112.29650553714734,
+      "sync_latency_ms": {
+        "mean": 370.4318115999813,
+        "median": 316.5466999998898,
+        "min": 19.46270000007644,
+        "max": 1273.6974999988888,
+        "std_dev": 201.63348641064093,
+        "p95": 769.0725800012842
+      },
+      "best_z": 0.00024933226058697626
+    },
+    {
+      "run_index": 1,
+      "duration_s": 4.637802900000679,
+      "total_evals": 500000,
+      "total_sync_requests": 500,
+      "total_errors": 0,
+      "evals_per_second": 107809.66996245718,
+      "syncs_per_second": 107.80966996245718,
+      "sync_latency_ms": {
+        "mean": 396.6266780000151,
+        "median": 369.11185000099067,
+        "min": 24.037099999986822,
+        "max": 1262.5812999995105,
+        "std_dev": 198.5404171193339,
+        "p95": 761.8900800004667
+      },
+      "best_z": 6.47549656492827e-05
+    },
+    {
+      "run_index": 2,
+      "duration_s": 4.797979499999201,
+      "total_evals": 500000,
+      "total_sync_requests": 500,
+      "total_errors": 0,
+      "evals_per_second": 104210.53278782939,
+      "syncs_per_second": 104.2105327878294,
+      "sync_latency_ms": {
+        "mean": 412.92307719995006,
+        "median": 387.4973499996486,
+        "min": 25.050500000361353,
+        "max": 1366.7111000013392,
+        "std_dev": 210.27797336255443,
+        "p95": 790.6381200003125
+      },
+      "best_z": 5.029631770133588e-05
+    }
+  ],
+  "summary": {
+    "avg_duration_s": 4.629426899999696,
+    "avg_evals_per_second": 108105.56942914464,
+    "total_evals_all_runs": 1500000,
+    "total_sync_requests_all_runs": 1500,
+    "request_reduction_vs_individual_percent": 99.9,
+    "total_errors_all_runs": 0,
+    "error_rate": 0.0,
+    "sync_latency_ms": {
+      "mean": 393.3271889333155,
+      "median": 358.5833500001172,
+      "min": 19.46270000007644,
+      "max": 1366.7111000013392,
+      "std_dev": 204.16092583773116,
+      "p95": 765.9030149999126
+    }
+  }
+}

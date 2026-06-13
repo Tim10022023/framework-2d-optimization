@@ -1,79 +1,83 @@
 # Deployment Guide
 
-Complete workflow for deploying the 2D Optimization Framework to a production server.
+Complete workflow for deploying the 2D Optimization Framework to a production server using Portainer.
 
 ## 🏗 Deployment Architecture
 
 The framework uses a 4-container architecture for high performance and scalability:
 
-1.  **Backend (Custom):** FastAPI application (needs build & export).
-2.  **Frontend (Custom):** React application (needs build & export).
-3.  **Database (Official):** PostgreSQL 17 (pulled automatically by server).
-4.  **Cache (Official):** Redis 7 (pulled automatically by server).
+1.  **Backend (Custom):** FastAPI application (needs build & export). Runs on port **8001** (internal 8000).
+2.  **Frontend (Custom):** React application (needs build & export). Runs on port **5173** (internal 80).
+3.  **Database (Official):** PostgreSQL 16 (pulled automatically).
+4.  **Cache (Official):** Redis 7 (pulled automatically).
 
 ---
 
 ## 🛠 Step-by-Step Deployment
 
 ### 1. Build & Export (On Build Machine)
-Run the full build pipeline and export the custom images:
+Run the build command providing the production server's IP and your desired Teacher PIN. These are baked into the frontend image at build-time.
+
 ```powershell
-python scripts/build.py
-docker save -o opt2d-backend-latest.tar opt2d-backend:latest
-docker save -o opt2d-frontend-latest.tar opt2d-frontend:latest
+# 1. Build locally with production arguments
+# Replace <SERVER_IP> with your Portainer host IP/domain
+docker compose build `
+  --build-arg VITE_API_URL=http://<SERVER_IP>:8001 `
+  --build-arg VITE_TEACHER_PIN=9999
+
+# 2. Save the custom images to compressed tar files
+docker save framework-2d-optimization-backend:latest | gzip > backend.tar.gz
+docker save framework-2d-optimization-frontend:latest | gzip > frontend.tar.gz
 ```
 
 ### 2. Prepare Server
 Ensure the production server has internet access (to pull official Postgres/Redis images) and has Docker/Portainer installed.
 
 ### 3. Upload & Import Custom Images (Portainer)
-1. Upload the two `.tar` files to the server.
-2. In Portainer, go to **Images** → **Load image**.
-3. Import both `opt2d-backend-latest.tar` and `opt2d-frontend-latest.tar`.
+1. In Portainer, go to **Images** → **Import**.
+2. Upload `backend.tar.gz`. Wait for completion.
+3. Upload `frontend.tar.gz`. Wait for completion.
 
 ### 4. Create Stack (Portainer)
-1. Go to **Stacks** → **+ Add stack**.
+1. Go to **Stacks** → **Add stack**.
 2. Name it `opt2d`.
-3. Paste the contents of `docker-compose.upload.yaml` into the editor.
-4. Portainer will automatically pull `postgres:17-alpine` and `redis:7-alpine`.
+3. Build method: **Upload**.
+4. Upload your `docker-compose.upload.yaml` file.
 
 ### 5. Set Environment Variables
-In the **Environment** section, set these variables:
+In the **Environment variables** section of the stack creation page, you **must** add these variables:
 
-| Variable | Scope | Purpose | Example |
-|----------|-------|---------|---------|
-| `BACKEND_CORS_ORIGINS` | Backend | Allow frontend calls | `http://SERVER-IP:5173` |
-| `VITE_API_URL` | Frontend | API endpoint for UI | `http://SERVER-IP:8000` |
-| `VITE_PUBLIC_APP_URL` | Frontend | Public app URL | `http://SERVER-IP:5173` |
-| `VITE_TEACHER_PIN` | Frontend | Teacher access PIN | `MY_SECURE_PIN` |
+| Variable | Recommended Value | Purpose |
+|----------|-------------------|---------|
+| `POSTGRES_USER` | `opt2d_admin` | Database username |
+| `POSTGRES_PASSWORD` | `choose_a_password` | Database password |
+| `POSTGRES_DB` | `opt2d_prod` | Database name |
+| `VITE_TEACHER_PIN` | `9999` | (Backend check) Match your build PIN |
+| `BACKEND_CORS_ORIGINS` | `*` | Allow frontend calls |
 
 ---
 
 ## 🧪 Post-Deployment Verification
 
 Perform these functional tests on the server:
-1. **Full Stack Check:** Verify all 4 containers (`db`, `redis`, `backend`, `frontend`) are **Healthy** in Portainer.
-2. **Teacher Login:** Can you log in to the Teacher view with your PIN?
-3. **Session Creation:** Can you create a new session?
-4. **Participant Join:** Can a student join via the session code?
-5. **Evaluation:** Does clicking a point return a Z value?
-6. **Leaderboard:** Does the leaderboard update in real-time?
-7. **Bots:** Can you start an internal bot from the Teacher panel?
-8. **Persistence:** Stop/Start the stack; is the session data still there?
+1. **Full Stack Check:** Verify all 4 containers (`opt2d-db`, `opt2d-redis`, `opt2d-backend`, `opt2d-frontend`) are **Healthy** or **Running**.
+2. **Frontend:** Access `http://<SERVER_IP>:5173`.
+3. **Teacher Login:** Can you log in to the Teacher view with your PIN?
+4. **Backend Health:** Access `http://<SERVER_IP>:8001/health`.
+5. **Session Creation:** Can you create a new session?
+6. **Persistence:** Stop/Start the stack; is the session data still there?
 
 ---
 
 ## 🔧 Troubleshooting
 
-### Database/Redis Connection
-- **Symptoms:** Backend logs show "Connection refused" to `db` or `redis`.
-- **Check:** Ensure all 4 containers are in the same Docker network (Portainer stack handles this automatically). Check health status of `db` and `redis`.
+### "Invalid Stack Config"
+- **Error:** `depends_on source data must be an array or slice`.
+- **Fix:** Ensure you are using the simplified `depends_on` list in `docker-compose.upload.yaml`.
 
-### API Connection Issues
-- **Symptoms:** Frontend loads but shows "API Error".
-- **Check:** Is `VITE_API_URL` correct? Does `http://SERVER-IP:8000/health` respond?
-- **CORS:** Ensure `BACKEND_CORS_ORIGINS` matches the frontend URL exactly.
+### Port 8000 Already Allocated
+- **Fix:** We use port **8001** for the backend in `docker-compose.upload.yaml` to avoid conflicts with other services. Ensure your frontend build-arg matches this.
 
-### Data Loss
-- **Symptoms:** Sessions disappear after restart.
-- **Check:** Ensure the Docker volume `opt2d_db_data` is correctly defined and mounted in `docker-compose.upload.yaml`.
+### PIN is "CHANGE_ME"
+- **Cause:** You set the PIN in Portainer but didn't rebuild the frontend image.
+- **Fix:** Re-run Step 1 with the `--build-arg VITE_TEACHER_PIN=...` and re-upload the frontend image.

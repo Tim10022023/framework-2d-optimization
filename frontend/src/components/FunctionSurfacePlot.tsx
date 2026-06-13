@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import Plot from "react-plotly.js";
 import type { Data, Layout } from "plotly.js";
 import { createGrid, getBenchmarkDefinition } from "../lib/benchmarkFunctions";
+import type { Point } from "../types";
 
 type OverlayPoint = {
   x: number;
@@ -41,12 +42,13 @@ export default function FunctionSurfacePlot({
       traces.push({
         type: "scatter3d",
         mode: "lines+markers",
-        x: points.map((p) => p.x),
-        y: points.map((p) => p.y),
-        z: points.map((p) => p.z ?? 0),
+        x: (points as Point[]).map((p) => p.x),
+        y: (points as Point[]).map((p) => p.y),
+        z: (points as Point[]).map((p) => p.z ?? 0),
         marker: {
-          size: 4,
-          color: "black",
+          size: (points as Point[]).map((p) => p.size ?? 4),
+          color: (points as Point[]).map((p) => p.color ?? "black"),
+          opacity: (points as Point[]).map((p) => p.opacity ?? 1.0)
         },
         line: {
           width: 4,

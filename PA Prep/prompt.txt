@@ -1,0 +1,160 @@
+Analyze this repository specifically for Chapter 6.3 of my scientific thesis:
+"Code Quality and Maintenance".
+
+Context:
+The project is a scalable framework for interactive teaching of 2D optimization algorithms through Black-Box simulation.
+The stack includes:
+- FastAPI backend
+- React/TypeScript frontend
+- PostgreSQL
+- Redis
+- Docker Compose
+- Python bot/client library
+- benchmark scripts for performance evaluation
+
+I need a factual, critical Markdown report that helps me write Chapter 6.3.
+Please inspect the repository and answer the following questions. Do not invent anything. If something is missing, unclear, or only partially implemented, explicitly say so.
+
+1. Repository structure and modularity
+- Describe the high-level repository structure.
+- Explain how backend, frontend, database, Redis, bot client, benchmarks, and deployment configuration are separated.
+- Identify whether responsibilities are clearly separated or mixed.
+- Mention examples of files/modules that show good modularity.
+- Mention examples where the code is still prototype-like or could be refactored.
+
+2. Backend code quality
+Analyze the backend implementation:
+- FastAPI route organization
+- separation between API routes, domain logic, persistence, Redis/cache logic, WebSocket logic, and database models
+- use of Pydantic schemas or validation
+- async database/session handling
+- error handling and HTTP status codes
+- logging if present
+- security/authentication approach, including admin tokens or session tokens
+- limitations or technical debt
+
+3. Frontend code quality
+Analyze the frontend implementation:
+- React/TypeScript structure
+- component separation
+- use of hooks/state
+- API client structure
+- WebSocket handling
+- error messages/loading states
+- maintainability of UI components
+- styling approach
+- limitations, e.g. MVP character, responsiveness, accessibility, complexity, duplicated logic
+
+4. Bot/client code quality
+Analyze the Python bot/client implementation:
+- BlackBoxClient API clarity
+- RPN interpreter structure
+- example bots / strategies
+- batch sync implementation
+- configuration and CLI usage if present
+- error handling
+- extensibility for additional strategies
+- limitations, especially around RPN obfuscation, validation, and manipulation resistance
+
+5. Tests and quality assurance
+Search the repository for:
+- unit tests
+- integration tests
+- frontend tests
+- backend tests
+- bot/client tests
+- smoke tests
+- benchmark tests
+- CI configuration
+- linting or formatting configuration
+
+For each, state:
+- file path
+- purpose
+- how it is run if visible
+- whether it is sufficient for a student thesis prototype
+- limitations
+
+If there are no automated tests, say so clearly.
+
+6. Linting, typing, formatting, and build quality
+Check for:
+- TypeScript config
+- ESLint
+- Prettier
+- Python type hints
+- mypy
+- Ruff
+- Black
+- pytest
+- package scripts
+- frontend build command
+- backend startup command
+
+Summarize what quality mechanisms exist and what is missing.
+
+7. Deployment and reproducibility
+Analyze:
+- Dockerfile(s)
+- docker-compose.yaml
+- environment variables / .env examples
+- README setup instructions
+- whether backend, frontend, PostgreSQL, and Redis are reproducibly startable
+- whether the benchmark suite records environment metadata and git hash
+- limitations around production deployment
+
+8. Security and integrity limitations
+Critically evaluate:
+- session code security
+- admin token handling
+- absence/presence of real authentication
+- bot result verification
+- RPN obfuscation vs. real security
+- data protection/privacy concerns
+- risks in a real production or public deployment
+
+Be very clear that this is a teaching prototype if that is the case.
+
+9. Maintainability and extensibility
+Evaluate how easy it would be to add:
+- new benchmark functions
+- new bot strategies
+- additional visualization modes
+- additional frontend roles/features
+- more dimensions beyond 2D
+- user accounts or course management
+- persistent result exports
+- more robust evaluation features
+
+Mention what parts of the architecture support extension and what parts would require larger refactoring.
+
+10. Known limitations and technical debt
+List concrete limitations you find in the code/repository, for example:
+- limited automated test coverage
+- MVP UI
+- hard-coded values
+- missing production auth
+- local-only assumptions
+- limited input validation
+- missing monitoring
+- no CI/CD
+- no accessibility checks
+- scaling assumptions not fully tested
+- benchmark limitations
+
+11. Thesis-ready summary for Chapter 6.3
+Write a concise thesis-style summary in German with:
+- what is already good from a code quality and maintenance perspective
+- what quality assurance was performed
+- what limitations remain
+- how these limitations should be interpreted in a student thesis prototype
+- how the system could be improved in future work
+
+Do not write the full chapter yet, only provide structured analysis and a German summary that I can use later.
+
+Important:
+Be critical and factual.
+Do not invent tests, tools, or quality mechanisms.
+Do not modify files.
+Do not run destructive commands.
+Do not change the repository.

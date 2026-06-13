@@ -2,12 +2,13 @@ import type { Point } from "../types";
 
 type Props = {
   points: Point[];
+  totalClicks?: number;
   targetZ: number;
   tolerance: number;
 };
 
-export default function StatsPanel({ points, targetZ, tolerance }: Props) {
-  const clicks = points.length;
+export default function StatsPanel({ points, totalClicks, targetZ, tolerance }: Props) {
+  const clicks = totalClicks ?? points.length;
 
   const bestZ = points.length > 0 ? Math.min(...points.map((p) => p.z)) : null;
 

@@ -1,0 +1,57 @@
+{
+  "benchmark": "individual_eval_baseline",
+  "parameters": {
+    "url": "http://localhost:8000",
+    "bots": 1,
+    "points": 1,
+    "runs": 1,
+    "warmup": 0,
+    "session_code": null,
+    "function": "sphere_shifted",
+    "output_dir": "benchmarks/results",
+    "seed": 42,
+    "verbose": false
+  },
+  "environment": {
+    "python_version": "3.14.3",
+    "os": "Windows",
+    "os_release": "11",
+    "cpu_count": 16,
+    "timestamp": "2026-06-02T13:40:02.057013",
+    "git_hash": "59bc58fefec77f40806eb94224c2821ae2504ba4"
+  },
+  "session_code": "D05368",
+  "runs": [
+    {
+      "run_index": 0,
+      "duration_s": 0.031134799999563256,
+      "total_points": 1,
+      "total_errors": 0,
+      "points_per_second": 32.118401274908706,
+      "latency_metrics_ms": {
+        "mean": 14.063399998121895,
+        "median": 14.063399998121895,
+        "min": 14.063399998121895,
+        "max": 14.063399998121895,
+        "std_dev": 0,
+        "p95": null
+      }
+    }
+  ],
+  "summary": {
+    "avg_duration_s": 0.031134799999563256,
+    "avg_points_per_second": 32.118401274908706,
+    "total_points_all_runs": 1,
+    "total_requests_all_runs": 1,
+    "total_errors_all_runs": 0,
+    "error_rate": 0.0,
+    "latency_ms": {
+      "mean": 14.063399998121895,
+      "median": 14.063399998121895,
+      "min": 14.063399998121895,
+      "max": 14.063399998121895,
+      "std_dev": 0,
+      "p95": null
+    }
+  }
+}

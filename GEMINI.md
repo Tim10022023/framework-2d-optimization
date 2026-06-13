@@ -99,5 +99,9 @@ framework-2d-optimization/
 
 ### Roadmap Progress
 - **Phase 1: High-Frequency Polling -> Real-Time Updates.** [DONE]
-- **Phase 2: Upgraded Student Workflow (Local Evaluation).** [DONE]
+- **Phase 2: Scalable Optimization & GA Support.** [DONE]
+    - [x] RPN Bytecode & Local Evaluation. [DONE]
+    - [x] Batch Trajectory Syncing. [DONE]
+    - [x] Scalable Snapshot (Downsampling). [DONE]
+    - [x] Educational GA Bot Template. [DONE]
 - **Phase 3: Teacher UX (Live Map) and Anti-Cheat verification.** [TODO]

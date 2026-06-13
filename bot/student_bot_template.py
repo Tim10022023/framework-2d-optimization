@@ -8,8 +8,8 @@ from blackbox_client import BlackBoxClient
 
 
 # --- Konfiguration ---
-API_URL = "http://localhost:8000"
-SESSION_CODE = "2767C5"  # Bitte durch aktuellen Code ersetzen
+API_URL = "http://localhost:8000/"
+SESSION_CODE = "F36182"  # Bitte durch aktuellen Code ersetzen
 BOT_NAME = f"Bot-Student-{random.randint(100, 999)}"
 
 
@@ -84,7 +84,7 @@ class LocalSearchBot:
                     break
             
             if not found_better:
-                step_size *= 0.5
+                step_size *= 0.0001
                 if step_size < 1e-5:
                     break
 
@@ -111,7 +111,7 @@ def main():
     # Beispiel für den neuen Workflow (Phase 2)
     bot = LocalSearchBot(API_URL, SESSION_CODE, BOT_NAME)
     try:
-        bot.run(max_local_steps=200)
+        bot.run(max_local_steps=500000)
     except Exception as e:
         print(f"Fehler: {e}")
         print("Hinweis: Stelle sicher, dass der Backend-Server läuft und der SESSION_CODE korrekt ist.")

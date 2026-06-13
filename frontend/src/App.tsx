@@ -87,6 +87,7 @@ export default function App() {
   );
 
   const [inspectPid, setInspectPid] = useState<string>("");
+  const [hoveredPid, setHoveredPid] = useState<string | null>(null);
   const [teacherSnapshot, setTeacherSnapshot] =
     useState<SessionSnapshot | null>(null);
 
@@ -113,6 +114,7 @@ export default function App() {
   const [draftMaxSteps, setDraftMaxSteps] = useState<number>(30);
 
   const [points, setPoints] = useState<Point[]>([]);
+  const [totalClicks, setTotalClicks] = useState<number>(0);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [exportData, setExportData] = useState<ExportData | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -193,6 +195,7 @@ export default function App() {
   function resetForNewSession() {
     setParticipantId(null);
     setPoints([]);
+    setTotalClicks(0);
     setLeaderboard(null);
     setExportData(null);
     setRevealed(false);
@@ -219,6 +222,7 @@ export default function App() {
   function leaveSession() {
     setParticipantId(null);
     setPoints([]);
+    setTotalClicks(0);
     setSnapshot(null);
     setShowOnlyBots(false);
     setError(null);
@@ -314,7 +318,12 @@ export default function App() {
 
     try {
       const r = await evaluatePoint(code.trim(), participantId, x, y);
-      setPoints((prev) => [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }]);
+      setTotalClicks(r.step);
+      setPoints((prev) => {
+        const exists = prev.some((p) => p.step === r.step);
+        if (exists) return prev;
+        return [...prev, { x: r.x, y: r.y, z: r.z, step: r.step }];
+      });
     } catch (e: unknown) {
       const error = e instanceof Error ? e : new Error(String(e));
       const msg = error?.message ?? String(e);
@@ -620,14 +629,16 @@ export default function App() {
           saveSessionCtx(null);
           setParticipantId(null);
           setPoints([]);
+          setTotalClicks(0);
           return;
         }
 
-        const restored = me.clicks.map((c, idx) => ({
+        setTotalClicks(me.total_clicks);
+        const restored = me.clicks.map((c) => ({
           x: c.x,
           y: c.y,
           z: c.z,
-          step: idx + 1,
+          step: c.step,
         }));
         setPoints(restored);
       } catch {
@@ -705,7 +716,7 @@ export default function App() {
             participantsCount={participantsCount}
             goal={selectedGoal}
             sessionStatus={sessionStatus}
-            stepsUsed={points.length}
+            stepsUsed={totalClicks}
             maxSteps={sessionMaxSteps}
           />
         )}
@@ -789,23 +800,37 @@ export default function App() {
                       sessionStatus={sessionStatus}
                       bounds={activeBounds}
                       points={points}
+                      goal={selectedGoal}
                       onEvaluate={handleEvaluate}
                       extraParticipants={
                         showOnlyBots && snapshot
                           ? snapshot.participants
                               .filter((p) => p.participant_id !== participantId)
                               .filter((p) => p.is_bot)
-                              .map((p) => ({
-                                name: p.name,
-                                isBot: p.is_bot,
-                                color: undefined,
-                                clicks: p.clicks.map((c, idx) => ({
-                                  x: c.x,
-                                  y: c.y,
-                                  z: c.z,
-                                  step: idx + 1,
-                                })),
-                              }))
+                              .map((p) => {
+                                const trailLength = 40;
+                                const clicks = p.clicks;
+                                // Nur die letzten N Klicks zeigen für bessere Performance
+                                const startIdx = Math.max(0, clicks.length - trailLength);
+                                const sliced = clicks.slice(startIdx);
+                                
+                                return {
+                                  name: p.name,
+                                  isBot: p.is_bot,
+                                  color: undefined,
+                                  clicks: sliced.map((c, idx) => {
+                                    const dist = sliced.length - 1 - idx;
+                                    return {
+                                      x: c.x,
+                                      y: c.y,
+                                      z: c.z,
+                                      step: c.step,
+                                      // Bots in der Übersicht etwas dezenter faden
+                                      opacity: Math.max(0.1, 1.0 - (dist / trailLength) * 0.9)
+                                    };
+                                  }),
+                                };
+                              })
                           : []
                       }
                     />
@@ -814,6 +839,7 @@ export default function App() {
                   <div style={{ flex: 1, minWidth: 280 }}>
                     <StatsPanel
                       points={points}
+                      totalClicks={totalClicks}
                       targetZ={activeFunction?.target_z ?? 0}
                       tolerance={activeFunction?.tolerance ?? 0.01}
                     />
@@ -862,6 +888,8 @@ export default function App() {
             <LeaderboardPanel
               leaderboard={leaderboard}
               onSelectParticipant={setInspectPid}
+              onHover={setHoveredPid}
+              hoveredPid={hoveredPid}
             />
           </div>
 
